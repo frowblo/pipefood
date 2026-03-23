@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pipefood-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pipefood
+      POSTGRES_USER: pipefood
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /volume1/docker/pipefood/data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipefood"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pipefood-internal
+
+  backend:
+    image: ${DOCKER_HUB_USER}/pipefood-backend:latest
+    container_name: pipefood-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pipefood:${DB_PASSWORD}@db:5432/pipefood
+      SECRET_KEY: ${SECRET_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - pipefood-internal
+
+  frontend:
+    image: ${DOCKER_HUB_USER}/pipefood-frontend:latest
+    container_name: pipefood-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    networks:
+      - pipefood-internal
+
+networks:
+  pipefood-internal:
+    driver: bridge
