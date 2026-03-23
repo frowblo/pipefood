@@ -86,6 +86,10 @@ async def delete_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
     recipe = result.scalar_one_or_none()
     if not recipe:
         raise HTTPException(404, "Recipe not found")
+    # Remove any planned meals referencing this recipe before deleting
+    from sqlalchemy import delete as sql_delete
+    from app.models.models import PlannedMeal
+    await db.execute(sql_delete(PlannedMeal).where(PlannedMeal.recipe_id == recipe_id))
     await db.delete(recipe)
     await db.commit()
 

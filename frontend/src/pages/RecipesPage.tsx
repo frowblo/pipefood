@@ -27,7 +27,15 @@ export default function RecipesPage() {
       qc.invalidateQueries({ queryKey: ['recipes'] })
       setSelected(null)
     },
+    onError: (e: any) => {
+      alert(`Failed to delete recipe: ${e?.response?.data?.detail ?? e.message}`)
+    },
   })
+
+  const handleDelete = (id: number) => {
+    if (!window.confirm('Delete this recipe? This cannot be undone.')) return
+    deleteRecipe.mutate(id)
+  }
 
   const importMutation = useMutation({
     mutationFn: (url: string) => recipesApi.importUrl(url),
@@ -118,9 +126,13 @@ export default function RecipesPage() {
                   </div>
                 )}
               </div>
-              <button className="btn" style={{ color: 'var(--color-red)', fontSize: 12 }}
-                onClick={() => deleteRecipe.mutate(selected.id)}>
-                Delete
+              <button
+                className="btn"
+                style={{ color: 'var(--color-red)', fontSize: 12 }}
+                disabled={deleteRecipe.isPending}
+                onClick={() => handleDelete(selected.id)}
+              >
+                {deleteRecipe.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>
 
@@ -177,10 +189,33 @@ export default function RecipesPage() {
               {selected.instructions && (
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                    Instructions
+                    Method
                   </div>
-                  <div className="card" style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                    {selected.instructions}
+                  <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    {selected.instructions.split('\n').filter(Boolean).map((step, i) => {
+                      // Strip leading number from stored format "1. Step text"
+                      const text = step.replace(/^\d+\.\s*/, '')
+                      return (
+                        <div key={i} style={{
+                          display: 'flex', gap: 14, padding: '12px 18px',
+                          borderBottom: i < selected.instructions!.split('\n').filter(Boolean).length - 1
+                            ? '1px solid var(--color-border)' : 'none',
+                          alignItems: 'flex-start',
+                        }}>
+                          <div style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: 'var(--color-brand-light)', color: 'var(--color-brand-dark)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 11, fontWeight: 500, marginTop: 1,
+                          }}>
+                            {i + 1}
+                          </div>
+                          <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--color-text-primary)', paddingTop: 2 }}>
+                            {text}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
