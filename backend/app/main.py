@@ -6,7 +6,9 @@ from app.api.routes.recipes import router as recipes_router
 from app.api.routes.plans import router as plans_router
 from app.api.routes.shopping_pantry import shopping_router, pantry_router
 
-app = FastAPI(title="PipeFood API", version="0.1.0", redirect_slashes=False)
+# redirect_slashes=True (default) — lets /api/recipes redirect to /api/recipes/
+# which is correct behaviour; the 404 was caused by disabling this
+app = FastAPI(title="PipeFood API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,11 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models.models import Recipe, RecipeIngredient, Ingredient, IngredientCategory
+from app.models.models import Recipe, RecipeIngredient, Ingredient
 from app.schemas.schemas import RecipeCreate, RecipeOut, ImportUrlRequest
-from app.services.ai_import import import_recipe_from_url, parse_recipe_text
+from app.services.ai_import import import_recipe_from_url
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
+
+# Reusable load options — always fetch ingredients + their ingredient in one query
+RECIPE_LOAD = selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient)
 
 
 async def get_or_create_ingredient(name: str, db: AsyncSession) -> Ingredient:
@@ -20,16 +23,14 @@ async def get_or_create_ingredient(name: str, db: AsyncSession) -> Ingredient:
     if not ingredient:
         ingredient = Ingredient(name=name.lower().strip())
         db.add(ingredient)
-        await db.flush()  # get id without committing
+        await db.flush()
     return ingredient
 
 
-@router.get("/", response_model=list[RecipeOut])
+@router.get("", response_model=list[RecipeOut])
 async def list_recipes(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Recipe)
-        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
-        .order_by(Recipe.name)
+        select(Recipe).options(RECIPE_LOAD).order_by(Recipe.name)
     )
     return result.scalars().all()
 
@@ -37,9 +38,7 @@ async def list_recipes(db: AsyncSession = Depends(get_db)):
 @router.get("/{recipe_id}", response_model=RecipeOut)
 async def get_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Recipe)
-        .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient))
-        .where(Recipe.id == recipe_id)
+        select(Recipe).options(RECIPE_LOAD).where(Recipe.id == recipe_id)
     )
     recipe = result.scalar_one_or_none()
     if not recipe:
@@ -47,7 +46,7 @@ async def get_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
     return recipe
 
 
-@router.post("/", response_model=RecipeOut, status_code=201)
+@router.post("", response_model=RecipeOut, status_code=201)
 async def create_recipe(body: RecipeCreate, db: AsyncSession = Depends(get_db)):
     recipe = Recipe(
         name=body.name,
@@ -73,8 +72,12 @@ async def create_recipe(body: RecipeCreate, db: AsyncSession = Depends(get_db)):
         db.add(ri)
 
     await db.commit()
-    await db.refresh(recipe)
-    return recipe
+
+    # Reload with eager-loaded relations — avoids MissingGreenlet on serialisation
+    result = await db.execute(
+        select(Recipe).options(RECIPE_LOAD).where(Recipe.id == recipe.id)
+    )
+    return result.scalar_one()
 
 
 @router.delete("/{recipe_id}", status_code=204)
@@ -95,11 +98,8 @@ async def import_from_url(body: ImportUrlRequest, db: AsyncSession = Depends(get
     except Exception as e:
         raise HTTPException(422, f"Failed to import recipe: {e}")
 
-    # Map parsed dict to RecipeCreate
     from app.schemas.schemas import RecipeIngredientIn
-    ingredients = [
-        RecipeIngredientIn(**ing) for ing in parsed.get("ingredients", [])
-    ]
+    ingredients = [RecipeIngredientIn(**ing) for ing in parsed.get("ingredients", [])]
     recipe_data = RecipeCreate(
         name=parsed["name"],
         description=parsed.get("description"),

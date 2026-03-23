@@ -17,7 +17,7 @@ MEAL_LOAD_OPTIONS = [
 ]
 
 
-@router.get("/", response_model=list[MealPlanOut])
+@router.get("", response_model=list[MealPlanOut])
 async def list_plans(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(MealPlan).options(*MEAL_LOAD_OPTIONS).order_by(MealPlan.week_start.desc())
@@ -25,7 +25,7 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
-@router.post("/", response_model=MealPlanOut, status_code=201)
+@router.post("", response_model=MealPlanOut, status_code=201)
 async def create_plan(body: MealPlanCreate, db: AsyncSession = Depends(get_db)):
     plan = MealPlan(name=body.name, week_start=body.week_start)
     db.add(plan)
