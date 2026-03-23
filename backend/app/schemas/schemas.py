@@ -26,10 +26,19 @@ class IngredientOut(IngredientBase):
 # --- Recipe ---
 
 class RecipeIngredientIn(BaseModel):
-    ingredient_name: str  # resolved to Ingredient on save
+    # Claude returns 'name'; manual creation uses 'ingredient_name' — accept both
+    ingredient_name: str
     quantity: float
     unit: str
     notes: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
+
+    def __init__(self, **data):
+        # Remap 'name' -> 'ingredient_name' if coming from AI extraction
+        if "name" in data and "ingredient_name" not in data:
+            data["ingredient_name"] = data.pop("name")
+        super().__init__(**data)
 
 class RecipeIngredientOut(BaseModel):
     id: int

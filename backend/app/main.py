@@ -6,7 +6,7 @@ from app.api.routes.recipes import router as recipes_router
 from app.api.routes.plans import router as plans_router
 from app.api.routes.shopping_pantry import shopping_router, pantry_router
 
-app = FastAPI(title="PipeFood API", version="0.1.0")
+app = FastAPI(title="PipeFood API", version="0.1.0", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
