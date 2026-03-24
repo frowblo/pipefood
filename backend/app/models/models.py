@@ -78,6 +78,8 @@ class RecipeIngredient(Base):
     quantity: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(20))
     notes: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Ingredient group label from recipe (e.g. "Marinade", "For the sauce")
+    group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     recipe: Mapped["Recipe"] = relationship(back_populates="ingredients")
     ingredient: Mapped["Ingredient"] = relationship(back_populates="recipe_ingredients")
@@ -157,3 +159,37 @@ class ShoppingListItem(Base):
 
     list: Mapped["ShoppingList"] = relationship(back_populates="items")
     ingredient: Mapped["Ingredient"] = relationship()
+
+
+class IngredientAlias(Base):
+    """
+    Maps a raw parsed name to a canonical ingredient name.
+    e.g. "cooking salt" -> "Salt", "canola oil" -> "Oil"
+    confirmed=True means auto-apply silently on future imports.
+    confirmed=False means it was rejected by the user — never suggest again.
+    pending aliases (suggested but not yet seen) are not stored here,
+    they exist only in the review modal response.
+    """
+    __tablename__ = "ingredient_aliases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    raw_name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    canonical_name: Mapped[str] = mapped_column(String(200))
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class IngredientConsolidation(Base):
+    """
+    Records that two ingredient names share a physical source.
+    e.g. "Lemon juice" + "Lemon zest" -> consolidated_name="Lemon (juice and zest)"
+    Used to avoid asking the same consolidation question twice.
+    """
+    __tablename__ = "ingredient_consolidations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Comma-separated sorted list of ingredient names that were consolidated
+    source_names: Mapped[str] = mapped_column(String(500), index=True)
+    consolidated_name: Mapped[str] = mapped_column(String(200))
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

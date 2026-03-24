@@ -32,6 +32,8 @@ class RecipeIngredientIn(BaseModel):
     unit: str
     notes: Optional[str] = None
 
+    group: Optional[str] = None
+
     model_config = {"populate_by_name": True}
 
     def __init__(self, **data):
@@ -46,6 +48,7 @@ class RecipeIngredientOut(BaseModel):
     quantity: float
     unit: str
     notes: Optional[str]
+    group: Optional[str] = None
     model_config = {"from_attributes": True}
 
 class RecipeCreate(BaseModel):
@@ -147,3 +150,40 @@ class ShoppingListOut(BaseModel):
 
 class ImportUrlRequest(BaseModel):
     url: str
+
+
+class AliasSuggestion(BaseModel):
+    raw_name: str
+    canonical_name: str
+    reason: str
+
+
+class ConsolidationSuggestion(BaseModel):
+    source_names: list[str]
+    consolidated_name: str
+    reason: str
+
+
+class RecipePreview(BaseModel):
+    parsed: dict
+    alias_suggestions: list[AliasSuggestion] = []
+    consolidation_suggestions: list[ConsolidationSuggestion] = []
+    auto_applied_aliases: list[str] = []
+
+
+class AliasDecision(BaseModel):
+    raw_name: str
+    canonical_name: str
+    confirmed: bool
+
+
+class ConsolidationDecision(BaseModel):
+    source_names: list[str]
+    consolidated_name: str
+    confirmed: bool
+
+
+class ConfirmImportRequest(BaseModel):
+    parsed: dict
+    alias_decisions: list[AliasDecision] = []
+    consolidation_decisions: list[ConsolidationDecision] = []

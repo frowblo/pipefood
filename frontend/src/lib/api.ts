@@ -92,12 +92,50 @@ export interface ShoppingList {
 
 // --- API calls ---
 
+export interface AliasSuggestion {
+  raw_name: string
+  canonical_name: string
+  reason: string
+}
+
+export interface ConsolidationSuggestion {
+  source_names: string[]
+  consolidated_name: string
+  reason: string
+}
+
+export interface RecipePreview {
+  parsed: any
+  alias_suggestions: AliasSuggestion[]
+  consolidation_suggestions: ConsolidationSuggestion[]
+  auto_applied_aliases: string[]
+}
+
+export interface AliasDecision {
+  raw_name: string
+  canonical_name: string
+  confirmed: boolean
+}
+
+export interface ConsolidationDecision {
+  source_names: string[]
+  consolidated_name: string
+  confirmed: boolean
+}
+
+export interface ConfirmImportRequest {
+  parsed: any
+  alias_decisions: AliasDecision[]
+  consolidation_decisions: ConsolidationDecision[]
+}
+
 export const recipesApi = {
   list: () => api.get<Recipe[]>('/recipes').then(r => r.data),
   get: (id: number) => api.get<Recipe>(`/recipes/${id}`).then(r => r.data),
   create: (data: object) => api.post<Recipe>('/recipes', data).then(r => r.data),
   delete: (id: number) => api.delete(`/recipes/${id}`),
-  importUrl: (url: string) => api.post<Recipe>('/recipes/import/url', { url }).then(r => r.data),
+  importPreview: (url: string) => api.post<RecipePreview>('/recipes/import/preview', { url }).then(r => r.data),
+  importConfirm: (body: ConfirmImportRequest) => api.post<Recipe>('/recipes/import/confirm', body).then(r => r.data),
 }
 
 export const plansApi = {
@@ -111,6 +149,8 @@ export const plansApi = {
     api.delete(`/plans/${planId}/meals/${mealId}`),
   markCooked: (planId: number, mealId: number) =>
     api.patch<PlannedMeal>(`/plans/${planId}/meals/${mealId}/cooked`).then(r => r.data),
+  updateMealServings: (planId: number, mealId: number, servings: number) =>
+    api.patch<PlannedMeal>(`/plans/${planId}/meals/${mealId}`, { servings }).then(r => r.data),
 }
 
 export const shoppingApi = {
