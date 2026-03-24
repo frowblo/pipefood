@@ -7,6 +7,7 @@ import PlannerPage from './pages/PlannerPage'
 import RecipesPage from './pages/RecipesPage'
 import ShoppingPage from './pages/ShoppingPage'
 import PantryPage from './pages/PantryPage'
+import ThisWeekPage from './pages/ThisWeekPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />}>
             <Route index element={<PlannerPage />} />
             <Route path="recipes" element={<RecipesPage />} />
+            <Route path="this-week" element={<ThisWeekPage />} />
             <Route path="shopping" element={<ShoppingPage />} />
             <Route path="pantry" element={<PantryPage />} />
           </Route>

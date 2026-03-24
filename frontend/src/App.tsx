@@ -3,6 +3,7 @@ import './App.css'
 
 const NAV = [
   { to: '/',          label: 'Planner',       icon: <GridIcon /> },
+  { to: '/this-week', label: 'This week',     icon: <ChefIcon /> },
   { to: '/recipes',   label: 'Recipes',       icon: <BookIcon /> },
   { to: '/shopping',  label: 'Shopping list', icon: <ListIcon /> },
   { to: '/pantry',    label: 'Pantry',        icon: <BoxIcon /> },
@@ -39,6 +40,15 @@ function GridIcon() {
       <rect x="8.5" y="1" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
       <rect x="1" y="8.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
       <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+    </svg>
+  )
+}
+
+function ChefIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M7.5 1.5a3 3 0 00-3 3v.5H3a1 1 0 00-1 1v6a1 1 0 001 1h9a1 1 0 001-1V6a1 1 0 00-1-1h-1.5V4.5a3 3 0 00-3-3z" stroke="currentColor" strokeWidth="1.2"/>
+      <path d="M5.5 9h4M7.5 7v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
     </svg>
   )
 }
