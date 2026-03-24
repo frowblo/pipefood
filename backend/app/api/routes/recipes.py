@@ -61,6 +61,9 @@ async def create_recipe(body: RecipeCreate, db: AsyncSession = Depends(get_db)):
         cook_minutes=body.cook_minutes,
         base_servings=body.base_servings,
         instructions=body.instructions,
+        calories=body.calories,
+        protein_g=body.protein_g,
+        fibre_g=body.fibre_g,
     )
     db.add(recipe)
     await db.flush()
@@ -271,6 +274,9 @@ async def import_confirm(body: ConfirmImportRequest, db: AsyncSession = Depends(
         base_servings=parsed.get("base_servings", 2),
         instructions=parsed.get("instructions"),
         ingredients=ingredients,
+        calories=parsed.get("calories"),
+        protein_g=parsed.get("protein_g"),
+        fibre_g=parsed.get("fibre_g"),
     )
 
     recipe = Recipe(
@@ -281,6 +287,9 @@ async def import_confirm(body: ConfirmImportRequest, db: AsyncSession = Depends(
         cook_minutes=recipe_data.cook_minutes,
         base_servings=recipe_data.base_servings,
         instructions=recipe_data.instructions,
+        calories=recipe_data.calories,
+        protein_g=recipe_data.protein_g,
+        fibre_g=recipe_data.fibre_g,
     )
     db.add(recipe)
     await db.flush()

@@ -44,6 +44,16 @@ export default function PlannerPage() {
       m => isSameDay(parseISO(m.planned_date), day) && m.meal_type === type
     ) ?? []
 
+  const dayNutrition = (day: Date) => {
+    const meals = currentPlan?.meals.filter(m => isSameDay(parseISO(m.planned_date), day)) ?? []
+    if (meals.length === 0) return null
+    const hasMissing = meals.some(m => m.recipe.calories == null)
+    const calories = meals.reduce((sum, m) => sum + (m.recipe.calories ?? 0), 0)
+    const protein = meals.reduce((sum, m) => sum + (m.recipe.protein_g ?? 0), 0)
+    const fibre = meals.reduce((sum, m) => sum + (m.recipe.fibre_g ?? 0), 0)
+    return { calories, protein, fibre, hasMissing, hasSomeData: meals.some(m => m.recipe.calories != null) }
+  }
+
   const totalMeals = currentPlan?.meals.length ?? 0
   const uniqueIngredients = new Set(
     currentPlan?.meals.flatMap(m => m.recipe.ingredients.map(i => i.ingredient.id))
@@ -180,6 +190,41 @@ export default function PlannerPage() {
                   })}
                 </>
               ))}
+              {/* Nutrition row */}
+              <>
+                <div style={{
+                  fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)',
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  display: 'flex', alignItems: 'center', paddingTop: 8
+                }}>
+                  Nutrition
+                </div>
+                {weekDays.map((day, di) => {
+                  const n = dayNutrition(day)
+                  if (!n || !n.hasSomeData) return (
+                    <div key={`nutr-${di}`} style={{ paddingTop: 6 }} />
+                  )
+                  return (
+                    <div key={`nutr-${di}`} style={{
+                      paddingTop: 6, fontSize: 10,
+                      color: 'var(--color-text-secondary)',
+                      display: 'flex', flexDirection: 'column', gap: 1,
+                    }}>
+                      <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                        {n.calories} kcal
+                      </div>
+                      <div>{n.protein.toFixed(1)}g protein</div>
+                      <div>{n.fibre.toFixed(1)}g fibre</div>
+                      {n.hasMissing && (
+                        <div title="One or more recipes are missing nutritional data"
+                          style={{ color: 'var(--color-amber)', fontSize: 9, marginTop: 2, cursor: 'default' }}>
+                          ⚠ incomplete
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
             </div>
           </div>
         )}

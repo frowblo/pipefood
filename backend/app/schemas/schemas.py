@@ -60,6 +60,9 @@ class RecipeCreate(BaseModel):
     base_servings: int = 2
     instructions: Optional[str] = None
     ingredients: list[RecipeIngredientIn] = []
+    calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    fibre_g: Optional[float] = None
 
 class RecipeOut(BaseModel):
     id: int
@@ -72,6 +75,9 @@ class RecipeOut(BaseModel):
     instructions: Optional[str]
     created_at: datetime
     ingredients: list[RecipeIngredientOut] = []
+    calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    fibre_g: Optional[float] = None
     model_config = {"from_attributes": True}
 
 

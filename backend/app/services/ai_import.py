@@ -100,11 +100,20 @@ INSTRUCTIONS:
 - When steps reference ingredient groups (e.g. "add the marinade ingredients"),
   keep that reference as-is — it maps to the group labels in the ingredient list
 
+NUTRITION (per serving):
+- If the recipe page includes a nutritional information panel, extract:
+  "calories": integer (kcal per serving),
+  "protein_g": number (grams of protein per serving),
+  "fibre_g": number (grams of fibre per serving)
+- Use the per-serving figures, not per-100g or totals
+- Round calories to nearest integer, protein and fibre to 1 decimal place
+- If nutritional info is not present on the page, omit all three keys entirely
+
 GENERAL:
 - quantity must always be a number
 - notes: brief prep details only (e.g. "finely chopped") — omit if not useful
 - omit keys entirely rather than using null, except for "group" which should be null not omitted
-- ignore advertising, nutritional panels, comments, and unrelated page content
+- ignore advertising, comments, and unrelated page content
 """
 
 

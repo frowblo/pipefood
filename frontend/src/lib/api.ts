@@ -42,6 +42,9 @@ export interface Recipe {
   instructions?: string
   created_at: string
   ingredients: RecipeIngredient[]
+  calories?: number
+  protein_g?: number
+  fibre_g?: number
 }
 
 export interface PlannedMeal {

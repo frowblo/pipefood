@@ -61,6 +61,10 @@ class Recipe(Base):
     base_servings: Mapped[int] = mapped_column(Integer, default=2)
     instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Nutritional info per serving (as stated on the recipe page)
+    calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    protein_g: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    fibre_g: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     ingredients: Mapped[list["RecipeIngredient"]] = relationship(
         back_populates="recipe", cascade="all, delete-orphan"
