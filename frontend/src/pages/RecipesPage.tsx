@@ -206,8 +206,12 @@ export default function RecipesPage() {
       {importStep === 'review' && preview && (
         <ReviewModal
           preview={preview}
-          onConfirm={(aliasDecisions, consolidationDecisions) =>
-            confirmMutation.mutate({ parsed: preview.parsed, alias_decisions: aliasDecisions, consolidation_decisions: consolidationDecisions })
+          onConfirm={(aliasDecisions, consolidationDecisions, nutrition) =>
+            confirmMutation.mutate({
+              parsed: { ...preview.parsed, ...nutrition },
+              alias_decisions: aliasDecisions,
+              consolidation_decisions: consolidationDecisions,
+            })
           }
           onBack={() => setImportStep('url')}
           onClose={closeImport}
@@ -282,7 +286,7 @@ function IngredientList({ ingredients }: { ingredients: any[] }) {
 
 function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: {
   preview: RecipePreview
-  onConfirm: (aliases: AliasDecision[], consolidations: ConsolidationDecision[]) => void
+  onConfirm: (aliases: AliasDecision[], consolidations: ConsolidationDecision[], nutrition: { calories?: number, protein_g?: number, fibre_g?: number }) => void
   onBack: () => void
   onClose: () => void
   isPending: boolean
@@ -292,13 +296,18 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
   const hasConsolidations = preview.consolidation_suggestions.length > 0
   const hasSuggestions = hasAliases || hasConsolidations
 
-  // Default undecided — user must explicitly accept or reject each suggestion
   const [aliasDecisions, setAliasDecisions] = useState<Record<string, 'accept' | 'reject' | null>>(
     () => Object.fromEntries(preview.alias_suggestions.map(a => [a.raw_name, null]))
   )
   const [consolidationDecisions, setConsolidationDecisions] = useState<Record<string, 'accept' | 'reject' | null>>(
     () => Object.fromEntries(preview.consolidation_suggestions.map(c => [c.source_names.join(','), null]))
   )
+
+  // Nutrition — pre-filled from extraction if available, otherwise blank
+  const [calories, setCalories] = useState<string>(preview.parsed.calories != null ? String(preview.parsed.calories) : '')
+  const [proteinG, setProteinG] = useState<string>(preview.parsed.protein_g != null ? String(preview.parsed.protein_g) : '')
+  const [fibreG, setFibreG] = useState<string>(preview.parsed.fibre_g != null ? String(preview.parsed.fibre_g) : '')
+  const nutritionAutoFilled = preview.parsed.calories != null || preview.parsed.protein_g != null || preview.parsed.fibre_g != null
 
   const allDecided = (
     preview.alias_suggestions.every(s => aliasDecisions[s.raw_name] !== null) &&
@@ -316,7 +325,12 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
       consolidated_name: s.consolidated_name,
       confirmed: consolidationDecisions[s.source_names.join(',')] === 'accept',
     }))
-    onConfirm(aliasDecs, consolidationDecs)
+    const nutrition = {
+      calories: calories ? parseInt(calories) : undefined,
+      protein_g: proteinG ? parseFloat(proteinG) : undefined,
+      fibre_g: fibreG ? parseFloat(fibreG) : undefined,
+    }
+    onConfirm(aliasDecs, consolidationDecs, nutrition)
   }
 
   const hasSuggestionsToDecide = preview.alias_suggestions.length > 0 || preview.consolidation_suggestions.length > 0
@@ -408,6 +422,39 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
           No suggestions — recipe looks clean.
         </div>
       )}
+
+      {/* Nutrition */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          Nutrition per serving
+        </div>
+        {nutritionAutoFilled ? (
+          <div style={{ fontSize: 11, color: 'var(--color-brand-dark)', background: 'var(--color-brand-light)', padding: '6px 10px', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
+            Auto-filled from recipe — check and correct if needed.
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 8 }}>
+            Not found on page. Enter manually if you have it, or leave blank.
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Calories (kcal)</label>
+            <input type="number" className="input" placeholder="e.g. 480"
+              value={calories} onChange={e => setCalories(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Protein (g)</label>
+            <input type="number" className="input" placeholder="e.g. 32"
+              value={proteinG} onChange={e => setProteinG(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Fibre (g)</label>
+            <input type="number" className="input" placeholder="e.g. 4"
+              value={fibreG} onChange={e => setFibreG(e.target.value)} />
+          </div>
+        </div>
+      </div>
 
       {error && <div style={{ fontSize: 12, color: 'var(--color-red)' }}>{error}</div>}
 

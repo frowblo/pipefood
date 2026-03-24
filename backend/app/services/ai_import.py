@@ -193,6 +193,43 @@ BROWSER_HEADERS = {
 MIN_TEXT_LENGTH = 500
 
 
+def _extract_jsonld_nutrition(html: str) -> str:
+    """
+    Extract nutrition data from JSON-LD structured data blocks.
+    Recipe sites like RecipeTin Eats embed nutrition as schema.org/Recipe JSON-LD
+    inside <script type="application/ld+json"> tags. Our HTML stripper removes
+    all script tags, so we must pull this out before stripping.
+    """
+    import json as _json
+    blocks = re.findall(
+        r'<script[^>]*type=["\'\']application/ld\+json["\'\'][^>]*>(.*?)</script>',
+        html, re.DOTALL | re.IGNORECASE
+    )
+    nutrition_lines = []
+    for block in blocks:
+        try:
+            data = _json.loads(block.strip())
+            # Handle both single object and @graph array
+            items = data if isinstance(data, list) else data.get("@graph", [data])
+            for item in items:
+                nutrition = item.get("nutrition") if isinstance(item, dict) else None
+                if nutrition:
+                    cal = nutrition.get("calories", "")
+                    protein = nutrition.get("proteinContent", "")
+                    fibre = nutrition.get("fiberContent", "") or nutrition.get("fibreContent", "")
+                    fat = nutrition.get("fatContent", "")
+                    carbs = nutrition.get("carbohydrateContent", "")
+                    if cal or protein or fibre:
+                        nutrition_lines.append(
+                            f"Nutritional information per serving: "
+                            f"Calories {cal}, Protein {protein}, "
+                            f"Fibre {fibre}, Fat {fat}, Carbs {carbs}"
+                        )
+        except Exception:
+            continue
+    return "\n".join(nutrition_lines)
+
+
 def _strip_html(html: str) -> str:
     text = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.DOTALL)
     text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.DOTALL)
@@ -205,9 +242,13 @@ async def _fetch_direct(url: str, client: httpx.AsyncClient) -> str | None:
     try:
         resp = await client.get(url, headers=BROWSER_HEADERS, follow_redirects=True)
         resp.raise_for_status()
+        # Extract structured nutrition data before stripping (script tags get removed)
+        nutrition_data = _extract_jsonld_nutrition(resp.text)
         text = _strip_html(resp.text)
+        if nutrition_data:
+            text = text + "\n\n" + nutrition_data
         if len(text) >= MIN_TEXT_LENGTH:
-            return text[:15000]
+            return text[:20000]
     except Exception:
         pass
     return None
