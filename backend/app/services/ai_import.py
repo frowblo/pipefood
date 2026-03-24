@@ -77,11 +77,13 @@ INGREDIENT GROUPS:
 
 UNITS — liquids:
 - All liquid ingredients use "cups", rounded to nearest 0.25
-- Very small liquid amounts (less than 0.25 cups) use "tbsp" or "tsp"
+- Very small liquid amounts (less than 0.25 cups) use "tbsp" rounded to nearest 0.5,
+  or "tsp" rounded to nearest 0.5
 - Do NOT use ml or l
 
 UNITS — solids:
-- All solid ingredients use "g"
+- All solid ingredients use "g", rounded to nearest 10
+  (e.g. 47g -> 50g, 183g -> 180g, 8g -> 10g)
 - Do NOT use oz, lb, or kg
 
 UNITS — exceptions (leave as-is, never convert):

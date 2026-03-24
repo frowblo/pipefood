@@ -2,11 +2,11 @@ import { NavLink, Outlet } from 'react-router-dom'
 import './App.css'
 
 const NAV = [
-  { to: '/',          label: 'Planner',       icon: <GridIcon /> },
-  { to: '/this-week', label: 'This week',     icon: <ChefIcon /> },
-  { to: '/recipes',   label: 'Recipes',       icon: <BookIcon /> },
-  { to: '/shopping',  label: 'Shopping list', icon: <ListIcon /> },
-  { to: '/pantry',    label: 'Pantry',        icon: <BoxIcon /> },
+  { to: '/',          label: 'Planner',   icon: <GridIcon /> },
+  { to: '/this-week', label: 'This week', icon: <ChefIcon /> },
+  { to: '/recipes',   label: 'Recipes',   icon: <BookIcon /> },
+  { to: '/shopping',  label: 'Shopping',  icon: <ListIcon /> },
+  { to: '/pantry',    label: 'Pantry',    icon: <BoxIcon /> },
 ]
 
 export default function App() {
@@ -21,7 +21,7 @@ export default function App() {
           {NAV.map(n => (
             <NavLink key={n.to} to={n.to} end={n.to === '/'} className="nav-item">
               {n.icon}
-              {n.label}
+              <span className="nav-label">{n.label}</span>
             </NavLink>
           ))}
         </nav>

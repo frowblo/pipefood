@@ -33,6 +33,12 @@ export default function PlannerPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   })
 
+  const updateServings = useMutation({
+    mutationFn: ({ mealId, servings }: { mealId: number; servings: number }) =>
+      plansApi.updateMealServings(currentPlan!.id, mealId, servings),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }),
+  })
+
   const mealsOnDay = (day: Date, type: MealType) =>
     currentPlan?.meals.filter(
       m => isSameDay(parseISO(m.planned_date), day) && m.meal_type === type
@@ -88,8 +94,8 @@ export default function PlannerPage() {
         )}
 
         {currentPlan && (
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(7, 1fr)`, gap: 6, minWidth: 700 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `60px repeat(7, minmax(90px, 1fr))`, gap: 4, minWidth: 700 }}>
               {/* Header row */}
               <div />
               {weekDays.map((day, i) => (
@@ -126,17 +132,31 @@ export default function PlannerPage() {
                             borderRadius: 'var(--radius-md)',
                             padding: '5px 8px',
                             fontSize: 11,
-                            position: 'relative',
-                            cursor: 'pointer',
-                          }}
-                            onClick={() => removeMeal.mutate({ mealId: meal.id })}
-                            title="Click to remove"
-                          >
-                            <div style={{ fontWeight: 500, color: meal.cooked ? 'var(--color-text-secondary)' : '#085041', lineHeight: 1.3 }}>
-                              {meal.recipe.name}
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 4 }}>
+                              <div style={{ fontWeight: 500, color: meal.cooked ? 'var(--color-text-secondary)' : '#085041', lineHeight: 1.3, flex: 1 }}>
+                                {meal.recipe.name}
+                              </div>
+                              <button
+                                onClick={() => removeMeal.mutate({ mealId: meal.id })}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0F6E56', fontSize: 10, padding: 0, lineHeight: 1, flexShrink: 0 }}
+                                title="Remove meal"
+                              >
+                                ✕
+                              </button>
                             </div>
-                            <div style={{ color: '#0F6E56', fontSize: 10, marginTop: 1 }}>
-                              {meal.servings} srv
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                              <button
+                                onClick={() => updateServings.mutate({ mealId: meal.id, servings: Math.max(1, meal.servings - 1) })}
+                                style={{ background: 'none', border: '1px solid #9FE1CB', borderRadius: 3, cursor: 'pointer', color: '#0F6E56', fontSize: 10, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                              >−</button>
+                              <span style={{ color: '#0F6E56', fontSize: 10, minWidth: 40, textAlign: 'center' }}>
+                                {meal.servings} srv
+                              </span>
+                              <button
+                                onClick={() => updateServings.mutate({ mealId: meal.id, servings: meal.servings + 1 })}
+                                style={{ background: 'none', border: '1px solid #9FE1CB', borderRadius: 3, cursor: 'pointer', color: '#0F6E56', fontSize: 10, width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                              >+</button>
                             </div>
                           </div>
                         ))}

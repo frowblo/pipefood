@@ -24,6 +24,7 @@ function scaleQty(qty: number, servings: number, baseServings: number): string {
 export default function ThisWeekPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedMealId, setSelectedMealId] = useState<number | null>(null)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640
 
   const weekStart = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), weekOffset * 7)
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -42,9 +43,9 @@ export default function ThisWeekPage() {
   const selectedMeal = meals.find(m => m.id === selectedMealId) ?? meals[0] ?? null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', height: '100%' }}>
-      {/* Left: meal list */}
-      <div style={{ borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '260px 1fr', height: '100%' }}>
+      {/* Left: meal list — hidden on mobile when meal selected */}
+      <div style={{ borderRight: isMobile ? 'none' : '1px solid var(--color-border)', display: isMobile && selectedMeal ? 'none' : 'flex', flexDirection: 'column' }}>
         <div className="page-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h1 className="page-title">This week</h1>
@@ -123,9 +124,16 @@ export default function ThisWeekPage() {
         </div>
       </div>
 
-      {/* Right: scaled recipe card */}
-      <div style={{ overflowY: 'auto' }}>
-        {!selectedMeal && (
+      {/* Right: scaled recipe card — full screen on mobile */}
+      <div style={{ overflowY: 'auto', display: isMobile && !selectedMeal ? 'none' : 'block' }}>
+        {isMobile && selectedMeal && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 0' }} onClick={() => setSelectedMealId(null)}>
+              ← Back to meals
+            </button>
+          </div>
+        )}
+        {!selectedMeal && !isMobile && (
           <div className="empty-state" style={{ paddingTop: 80 }}>
             <div className="empty-state-title">No meals planned</div>
             <div className="empty-state-body">Add meals in the Planner to see scaled recipes here.</div>

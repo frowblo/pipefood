@@ -16,6 +16,7 @@ export default function RecipesPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Recipe | null>(null)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640
   const [importStep, setImportStep] = useState<'idle' | 'url' | 'review'>('idle')
   const [importUrl, setImportUrl] = useState('')
   const [importError, setImportError] = useState('')
@@ -60,9 +61,9 @@ export default function RecipesPage() {
   const filtered = recipes?.filter(r => r.name.toLowerCase().includes(search.toLowerCase())) ?? []
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', height: '100%' }}>
-      {/* Left: recipe list */}
-      <div style={{ borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', height: '100%' }}>
+      {/* Left: recipe list — hidden on mobile when recipe selected */}
+      <div style={{ borderRight: isMobile ? 'none' : '1px solid var(--color-border)', display: isMobile && selected ? 'none' : 'flex', flexDirection: 'column' }}>
         <div className="page-header" style={{ gap: 8, flexDirection: 'column', alignItems: 'stretch' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1 className="page-title">Recipes</h1>
@@ -97,9 +98,16 @@ export default function RecipesPage() {
         </div>
       </div>
 
-      {/* Right: recipe detail */}
-      <div style={{ overflowY: 'auto' }}>
-        {!selected && (
+      {/* Right: recipe detail — full screen on mobile when selected */}
+      <div style={{ overflowY: 'auto', display: isMobile && !selected ? 'none' : 'block' }}>
+        {isMobile && selected && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 0' }} onClick={() => setSelected(null)}>
+              ← Back to recipes
+            </button>
+          </div>
+        )}
+        {!selected && !isMobile && (
           <div className="empty-state" style={{ paddingTop: 80 }}>
             <div className="empty-state-title">Select a recipe</div>
             <div className="empty-state-body">Or import one from a URL using the button above.</div>
