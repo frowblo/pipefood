@@ -46,8 +46,20 @@ async def generate_shopping_list(plan_id: int, db: AsyncSession) -> ShoppingList
         scale = meal.servings / meal.recipe.base_servings
         for ri in meal.recipe.ingredients:
             agg = aggregated[ri.ingredient_id]
+            # Guard against unit mismatch — don't add e.g. cups + cloves
+            if agg["unit"] and agg["unit"] != ri.unit:
+                # Units differ — keep the first unit and skip adding incompatible qty
+                # This prevents silent garbage like 0.7cups + 0.7cups for garlic cloves
+                import logging
+                logging.warning(
+                    f"Unit mismatch for ingredient {ri.ingredient_id} "
+                    f"({ri.ingredient.name}): stored as '{agg['unit']}', "
+                    f"recipe '{meal.recipe.name}' uses '{ri.unit}'. Skipping addition."
+                )
+                agg["meals"].append(meal.recipe.name)
+                continue
             agg["qty"] += ri.quantity * scale
-            agg["unit"] = ri.unit  # assume consistent units per ingredient
+            agg["unit"] = ri.unit
             agg["ingredient"] = ri.ingredient
             agg["meals"].append(meal.recipe.name)
 

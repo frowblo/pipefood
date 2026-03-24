@@ -69,13 +69,17 @@ UNITS — solids:
 
 UNITS — exceptions (leave as-is, do not convert):
 - bunch, head, clove, pinch, sprig, stalk, slice, sheet, piece, can, jar, sachet, packet
+- These must NEVER be converted to cups, g, or any other unit
+- Garlic is always measured in cloves — never cups or ml
+- Ginger is always measured in g — never cups or tsp unless a very small amount
+- Onion, shallot, chilli are always measured in pieces or whole units
 
 INSTRUCTIONS:
 - Return as a JSON array of strings — one string per step
-- Each step is a single clear action, written as a complete sentence
+- Each step should match the original recipe's steps as closely as possible
 - Do not number the steps — that is handled by the app
-- Do not combine multiple actions into one step
-- If the source has vague or combined steps, split them sensibly
+- Do not split steps that the original recipe keeps together
+- Only split if a single source step contains truly unrelated actions
 
 GENERAL:
 - quantity must always be a number (never a string)

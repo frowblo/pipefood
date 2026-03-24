@@ -5,7 +5,7 @@ import { format, parseISO, isPast, isWithinInterval, addDays } from 'date-fns'
 
 export default function PantryPage() {
   const qc = useQueryClient()
-  const [showAdd, setShowAdd] = useState(false)
+  // Pantry is now managed via the shopping list — read only here
 
   const { data: pantry, isLoading } = useQuery({
     queryKey: ['pantry'],
@@ -32,7 +32,9 @@ export default function PantryPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Pantry</h1>
-        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add item</button>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          Manage stock via the shopping list
+        </div>
       </div>
 
       <div className="page-body">

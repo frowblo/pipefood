@@ -120,6 +120,15 @@ export const shoppingApi = {
     api.get<ShoppingList>(`/shopping/${planId}`).then(r => r.data),
   checkItem: (itemId: number) =>
     api.patch<{ id: number; checked: boolean }>(`/shopping/items/${itemId}/check`).then(r => r.data),
+  markInStock: (itemId: number, quantity: number, unit: string, expiry_date?: string) =>
+    api.post<{ id: number; checked: boolean; from_pantry: boolean }>(
+      `/shopping/items/${itemId}/mark-in-stock`,
+      { quantity, unit, expiry_date }
+    ).then(r => r.data),
+  markOutOfStock: (itemId: number) =>
+    api.post<{ id: number; checked: boolean; from_pantry: boolean }>(
+      `/shopping/items/${itemId}/mark-out-of-stock`
+    ).then(r => r.data),
 }
 
 export const pantryApi = {

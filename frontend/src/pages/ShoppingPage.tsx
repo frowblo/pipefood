@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { plansApi, shoppingApi, ShoppingListItem } from '../lib/api'
-import { format, parseISO, startOfWeek, addDays } from 'date-fns'
+import { plansApi, shoppingApi, pantryApi, ShoppingListItem } from '../lib/api'
 
 const CATEGORY_ORDER = ['meat', 'seafood', 'produce', 'dairy', 'dry_goods', 'condiments', 'frozen', 'bakery', 'other']
 const CATEGORY_LABELS: Record<string, string> = {
@@ -18,10 +17,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function ShoppingPage() {
   const qc = useQueryClient()
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
+  const [inStockModal, setInStockModal] = useState<ShoppingListItem | null>(null)
 
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: plansApi.list })
-
-  // Default to most recent plan
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null
 
   const { data: shoppingList, isLoading } = useQuery({
@@ -39,7 +37,6 @@ export default function ShoppingPage() {
   const checkItem = useMutation({
     mutationFn: (itemId: number) => shoppingApi.checkItem(itemId),
     onMutate: async (itemId) => {
-      // Optimistic update
       await qc.cancelQueries({ queryKey: ['shopping', activePlanId] })
       qc.setQueryData(['shopping', activePlanId], (old: any) => ({
         ...old,
@@ -51,17 +48,39 @@ export default function ShoppingPage() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['shopping', activePlanId] }),
   })
 
-  // Group items by category, pantry items last
-  const grouped = shoppingList?.items.reduce((acc, item) => {
-    const cat = item.from_pantry ? '_pantry' : (item.ingredient.category ?? 'other')
+  const markInStock = useMutation({
+    mutationFn: ({ itemId, quantity, unit }: { itemId: number; quantity: number; unit: string }) =>
+      shoppingApi.markInStock(itemId, quantity, unit),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shopping', activePlanId] })
+      qc.invalidateQueries({ queryKey: ['pantry'] })
+      setInStockModal(null)
+    },
+  })
+
+  const markOutOfStock = useMutation({
+    mutationFn: (itemId: number) => shoppingApi.markOutOfStock(itemId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shopping', activePlanId] })
+      qc.invalidateQueries({ queryKey: ['pantry'] })
+    },
+  })
+
+  // Split items into three buckets
+  const allItems = shoppingList?.items ?? []
+  const pantryConfirm = allItems.filter(i => i.from_pantry)         // tracked in pantry — needs confirmation
+  const toBuy = allItems.filter(i => !i.from_pantry && !i.checked)  // still need to buy
+  const covered = allItems.filter(i => !i.from_pantry && i.checked) // ticked as already have
+
+  // Group buy items by category
+  const grouped = toBuy.reduce((acc, item) => {
+    const cat = item.ingredient.category ?? 'other'
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(item)
     return acc
-  }, {} as Record<string, ShoppingListItem[]>) ?? {}
+  }, {} as Record<string, ShoppingListItem[]>)
 
-  const toBuy = shoppingList?.items.filter(i => !i.from_pantry) ?? []
-  const checked = toBuy.filter(i => i.checked).length
-  const leftovers = shoppingList?.items.filter(i => (i.leftover_quantity ?? 0) > 0) ?? []
+  const leftovers = allItems.filter(i => (i.leftover_quantity ?? 0) > 0)
 
   return (
     <div>
@@ -77,7 +96,8 @@ export default function ShoppingPage() {
               ))}
             </select>
           )}
-          <button className="btn btn-primary" onClick={() => generate.mutate()} disabled={!activePlanId || generate.isPending}>
+          <button className="btn btn-primary" onClick={() => generate.mutate()}
+            disabled={!activePlanId || generate.isPending}>
             {generate.isPending ? 'Generating...' : shoppingList ? 'Regenerate' : 'Generate list'}
           </button>
         </div>
@@ -87,7 +107,7 @@ export default function ShoppingPage() {
         {!activePlanId && (
           <div className="empty-state">
             <div className="empty-state-title">No meal plan found</div>
-            <div className="empty-state-body">Create a plan in the Planner first, then generate a shopping list here.</div>
+            <div className="empty-state-body">Create a plan in the Planner first.</div>
           </div>
         )}
 
@@ -100,137 +120,213 @@ export default function ShoppingPage() {
 
         {shoppingList && (
           <>
-            {/* Summary stats */}
+            {/* Stats */}
             <div className="stat-grid">
               <div className="stat-card">
                 <div className="stat-value">{toBuy.length}</div>
-                <div className="stat-label">Items to buy</div>
+                <div className="stat-label">To buy</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value">{checked}/{toBuy.length}</div>
-                <div className="stat-label">Checked off</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: grouped['_pantry'] ? 'var(--color-brand)' : 'var(--color-text-tertiary)' }}>
-                  {grouped['_pantry']?.length ?? 0}
+                <div className="stat-value" style={{ color: 'var(--color-brand)' }}>
+                  {covered.length + pantryConfirm.length}
                 </div>
-                <div className="stat-label">From pantry</div>
+                <div className="stat-label">Covered</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value" style={{ color: leftovers.length > 0 ? 'var(--color-amber)' : 'var(--color-brand)' }}>
+                <div className="stat-value" style={{ color: pantryConfirm.length > 0 ? 'var(--color-amber)' : 'var(--color-text-tertiary)' }}>
+                  {pantryConfirm.length}
+                </div>
+                <div className="stat-label">Confirm pantry</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value" style={{ color: leftovers.length > 0 ? 'var(--color-amber)' : 'var(--color-text-tertiary)' }}>
                   {leftovers.length}
                 </div>
-                <div className="stat-label">Leftover items</div>
+                <div className="stat-label">Leftovers</div>
               </div>
             </div>
+
+            {/* Pantry confirmation section */}
+            {pantryConfirm.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)',
+                  textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8
+                }}>
+                  Confirm pantry stock
+                </div>
+                <div style={{
+                  background: 'var(--color-amber-light)', border: '1px solid #FAC775',
+                  borderRadius: 'var(--radius-md)', padding: '10px 14px',
+                  fontSize: 12, color: 'var(--color-amber)', marginBottom: 10
+                }}>
+                  These items are tracked in your pantry. Confirm you still have them before shopping.
+                </div>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {pantryConfirm.map((item, i) => (
+                    <div key={item.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                      borderBottom: i < pantryConfirm.length - 1 ? '1px solid var(--color-border)' : 'none',
+                      background: 'var(--color-surface)',
+                    }}>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                        {item.ingredient.name}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginRight: 8 }}>
+                        need {item.quantity_needed} {item.unit}
+                      </span>
+                      <span className="badge badge-green" style={{ marginRight: 8 }}>in pantry</span>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '4px 10px', color: 'var(--color-brand)', borderColor: '#9FE1CB' }}
+                        onClick={() => checkItem.mutate(item.id)}
+                      >
+                        Still have it
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '4px 10px', color: 'var(--color-red)', borderColor: '#F09595' }}
+                        onClick={() => markOutOfStock.mutate(item.id)}
+                      >
+                        Used up
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Leftover alert */}
             {leftovers.length > 0 && (
               <div style={{
                 background: 'var(--color-amber-light)', border: '1px solid #FAC775',
                 borderRadius: 'var(--radius-md)', padding: '10px 14px',
-                fontSize: 12, color: 'var(--color-amber)', marginBottom: 20
+                fontSize: 12, color: 'var(--color-amber)', marginBottom: 16
               }}>
                 <strong>Leftovers this week:</strong>{' '}
                 {leftovers.map(i => `${i.leftover_quantity}${i.unit} ${i.ingredient.name}`).join(' · ')}
               </div>
             )}
 
-            {/* Grouped items */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {CATEGORY_ORDER.map(cat => {
-                const items = grouped[cat]
-                if (!items?.length) return null
-                return (
-                  <CategorySection
-                    key={cat}
-                    category={cat}
-                    label={CATEGORY_LABELS[cat]}
-                    color={CATEGORY_COLORS[cat]}
-                    items={items}
-                    onCheck={id => checkItem.mutate(id)}
-                  />
-                )
-              })}
+            {/* Buy list grouped by category */}
+            {toBuy.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                {CATEGORY_ORDER.map(cat => {
+                  const items = grouped[cat]
+                  if (!items?.length) return null
+                  return (
+                    <CategorySection
+                      key={cat}
+                      label={CATEGORY_LABELS[cat]}
+                      color={CATEGORY_COLORS[cat]}
+                      items={items}
+                      onCheck={id => checkItem.mutate(id)}
+                      onMarkInStock={item => setInStockModal(item)}
+                    />
+                  )
+                })}
+              </div>
+            )}
 
-              {/* Pantry section */}
-              {grouped['_pantry']?.length > 0 && (
-                <CategorySection
-                  key="_pantry"
-                  category="_pantry"
-                  label="Already in pantry"
-                  color="#1D9E75"
-                  items={grouped['_pantry']}
-                  onCheck={id => checkItem.mutate(id)}
-                />
-              )}
-            </div>
+            {/* Covered items (already have / confirmed pantry) */}
+            {covered.length > 0 && (
+              <div>
+                <div style={{
+                  fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)',
+                  textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8
+                }}>
+                  Already have
+                </div>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {covered.map((item, i) => (
+                    <div key={item.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
+                      borderBottom: i < covered.length - 1 ? '1px solid var(--color-border)' : 'none',
+                      background: 'var(--color-surface-subtle)',
+                    }}>
+                      {/* Uncheck */}
+                      <div onClick={() => checkItem.mutate(item.id)} style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+                        border: '1px solid #1D9E75', background: '#1D9E75',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                          <path d="M1 3l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--color-text-tertiary)', textDecoration: 'line-through' }}>
+                        {item.ingredient.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                        {item.quantity_to_buy} {item.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {toBuy.length === 0 && pantryConfirm.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-title">All done!</div>
+                <div className="empty-state-body">Everything is covered for this week.</div>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {/* Mark in stock modal */}
+      {inStockModal && (
+        <InStockModal
+          item={inStockModal}
+          onConfirm={(quantity, unit) => markInStock.mutate({ itemId: inStockModal.id, quantity, unit })}
+          onClose={() => setInStockModal(null)}
+          isPending={markInStock.isPending}
+        />
+      )}
     </div>
   )
 }
 
-function CategorySection({ category, label, color, items, onCheck }: {
-  category: string
+function CategorySection({ label, color, items, onCheck, onMarkInStock }: {
   label: string
   color: string
   items: ShoppingListItem[]
   onCheck: (id: number) => void
+  onMarkInStock: (item: ShoppingListItem) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
-  const isPantry = category === '_pantry'
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div
-        onClick={() => setCollapsed(c => !c)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 16px', cursor: 'pointer',
-          background: 'var(--color-surface-subtle)',
-          borderBottom: collapsed ? 'none' : '1px solid var(--color-border)',
-        }}
-      >
+      <div onClick={() => setCollapsed(c => !c)} style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+        cursor: 'pointer', background: 'var(--color-surface-subtle)',
+        borderBottom: collapsed ? 'none' : '1px solid var(--color-border)',
+      }}>
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
         <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{label}</span>
         <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
           {items.length} {items.length === 1 ? 'item' : 'items'}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
-          {collapsed ? '▸' : '▾'}
-        </span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{collapsed ? '▸' : '▾'}</span>
       </div>
 
       {!collapsed && items.map((item, i) => (
         <div key={item.id} style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
           borderBottom: i < items.length - 1 ? '1px solid var(--color-border)' : 'none',
-          background: item.checked || isPantry ? 'var(--color-surface-subtle)' : 'var(--color-surface)',
+          background: 'var(--color-surface)',
         }}>
-          {/* Checkbox */}
-          <div
-            onClick={() => onCheck(item.id)}
-            style={{
-              width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
-              border: `1px solid ${item.checked || isPantry ? '#1D9E75' : 'var(--color-border-strong)'}`,
-              background: item.checked || isPantry ? '#1D9E75' : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            {(item.checked || isPantry) && (
-              <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                <path d="M1 3l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
+          {/* Buy-list tick */}
+          <div onClick={() => onCheck(item.id)} style={{
+            width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+            border: '1px solid var(--color-border-strong)', background: 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} />
 
-          <span style={{
-            flex: 1, fontSize: 13,
-            color: item.checked || isPantry ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-            textDecoration: item.checked || isPantry ? 'line-through' : 'none',
-          }}>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--color-text-primary)' }}>
             {item.ingredient.name}
           </span>
 
@@ -240,7 +336,7 @@ function CategorySection({ category, label, color, items, onCheck }: {
 
           {item.packs_to_buy && (
             <span className="badge badge-gray" style={{ fontSize: 9, minWidth: 44, justifyContent: 'center' }}>
-              ×{item.packs_to_buy} pack
+              ×{item.packs_to_buy}
             </span>
           )}
 
@@ -250,9 +346,80 @@ function CategorySection({ category, label, color, items, onCheck }: {
             </span>
           )}
 
-          {isPantry && <span className="badge badge-green" style={{ fontSize: 9 }}>in pantry</span>}
+          {/* Already have button */}
+          <button
+            onClick={() => onMarkInStock(item)}
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '3px 8px', color: 'var(--color-brand)', borderColor: '#9FE1CB', whiteSpace: 'nowrap' }}
+          >
+            I have this
+          </button>
         </div>
       ))}
+    </div>
+  )
+}
+
+function InStockModal({ item, onConfirm, onClose, isPending }: {
+  item: ShoppingListItem
+  onConfirm: (quantity: number, unit: string) => void
+  onClose: () => void
+  isPending: boolean
+}) {
+  const [quantity, setQuantity] = useState('')
+  const [unit, setUnit] = useState(item.unit)
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)',
+        padding: 28, width: 360, display: 'flex', flexDirection: 'column', gap: 16
+      }} onClick={e => e.stopPropagation()}>
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>
+            {item.ingredient.name}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            Recipe needs {item.quantity_needed} {item.unit}. How much do you have?
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Quantity</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="e.g. 500"
+              value={quantity}
+              onChange={e => setQuantity(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Unit</label>
+            <input
+              className="input"
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn-primary"
+            disabled={!quantity || isPending}
+            onClick={() => onConfirm(parseFloat(quantity), unit)}
+          >
+            {isPending ? 'Saving...' : 'Add to pantry'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
