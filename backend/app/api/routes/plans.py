@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -30,8 +31,11 @@ async def create_plan(body: MealPlanCreate, db: AsyncSession = Depends(get_db)):
     plan = MealPlan(name=body.name, week_start=body.week_start)
     db.add(plan)
     await db.commit()
-    await db.refresh(plan)
-    return plan
+    # Reload with eager-loaded relations to avoid MissingGreenlet on serialisation
+    result = await db.execute(
+        select(MealPlan).options(*MEAL_LOAD_OPTIONS).where(MealPlan.id == plan.id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/{plan_id}", response_model=MealPlanOut)
@@ -99,6 +103,30 @@ async def mark_cooked(plan_id: int, meal_id: int, db: AsyncSession = Depends(get
     if not meal:
         raise HTTPException(404, "Meal not found")
     meal.cooked = True
+    await db.commit()
+    await db.refresh(meal)
+    return meal
+
+
+class UpdateMealBody(BaseModel):
+    servings: int
+
+
+@router.patch("/{plan_id}/meals/{meal_id}", response_model=PlannedMealOut)
+async def update_meal(plan_id: int, meal_id: int, body: UpdateMealBody, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(PlannedMeal)
+        .options(
+            selectinload(PlannedMeal.recipe)
+            .selectinload(Recipe.ingredients)
+            .selectinload(RecipeIngredient.ingredient)
+        )
+        .where(PlannedMeal.id == meal_id, PlannedMeal.plan_id == plan_id)
+    )
+    meal = result.scalar_one_or_none()
+    if not meal:
+        raise HTTPException(404, "Meal not found")
+    meal.servings = body.servings
     await db.commit()
     await db.refresh(meal)
     return meal

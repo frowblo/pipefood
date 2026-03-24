@@ -284,12 +284,17 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
   const hasConsolidations = preview.consolidation_suggestions.length > 0
   const hasSuggestions = hasAliases || hasConsolidations
 
-  // Decision state: 'accept' | 'reject' | null (undecided)
-  const [aliasDecisions, setAliasDecisions] = useState<Record<string, 'accept' | 'reject'>>(
-    () => Object.fromEntries(preview.alias_suggestions.map(a => [a.raw_name, 'accept']))
+  // Default undecided — user must explicitly accept or reject each suggestion
+  const [aliasDecisions, setAliasDecisions] = useState<Record<string, 'accept' | 'reject' | null>>(
+    () => Object.fromEntries(preview.alias_suggestions.map(a => [a.raw_name, null]))
   )
-  const [consolidationDecisions, setConsolidationDecisions] = useState<Record<string, 'accept' | 'reject'>>(
-    () => Object.fromEntries(preview.consolidation_suggestions.map(c => [c.source_names.join(','), 'accept']))
+  const [consolidationDecisions, setConsolidationDecisions] = useState<Record<string, 'accept' | 'reject' | null>>(
+    () => Object.fromEntries(preview.consolidation_suggestions.map(c => [c.source_names.join(','), null]))
+  )
+
+  const allDecided = (
+    preview.alias_suggestions.every(s => aliasDecisions[s.raw_name] !== null) &&
+    preview.consolidation_suggestions.every(s => consolidationDecisions[s.source_names.join(',')] !== null)
   )
 
   const handleConfirm = () => {
@@ -305,6 +310,8 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
     }))
     onConfirm(aliasDecs, consolidationDecs)
   }
+
+  const hasSuggestionsToDecide = preview.alias_suggestions.length > 0 || preview.consolidation_suggestions.length > 0
 
   const recipe = preview.parsed
 
@@ -396,9 +403,14 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
 
       {error && <div style={{ fontSize: 12, color: 'var(--color-red)' }}>{error}</div>}
 
+      {hasSuggestionsToDecide && !allDecided && (
+        <div style={{ fontSize: 12, color: 'var(--color-amber)', background: 'var(--color-amber-light)', padding: '8px 12px', borderRadius: 'var(--radius-md)' }}>
+          Please accept or reject each suggestion above before saving.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button className="btn" onClick={onBack}>Back</button>
-        <button className="btn btn-primary" disabled={isPending} onClick={handleConfirm}>
+        <button className="btn btn-primary" disabled={isPending || (hasSuggestionsToDecide && !allDecided)} onClick={handleConfirm}>
           {isPending ? 'Saving...' : 'Save recipe'}
         </button>
       </div>
@@ -409,7 +421,7 @@ function ReviewModal({ preview, onConfirm, onBack, onClose, isPending, error }: 
 function SuggestionRow({ label, reason, decision, onAccept, onReject, last }: {
   label: React.ReactNode
   reason: string
-  decision: 'accept' | 'reject'
+  decision: 'accept' | 'reject' | null
   onAccept: () => void
   onReject: () => void
   last: boolean
@@ -419,22 +431,38 @@ function SuggestionRow({ label, reason, decision, onAccept, onReject, last }: {
       padding: '10px 14px',
       borderBottom: last ? 'none' : '1px solid var(--color-border)',
       background: decision === 'accept' ? 'var(--color-brand-light)' : decision === 'reject' ? 'var(--color-surface-subtle)' : 'var(--color-surface)',
+      transition: 'background 0.15s',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, fontSize: 13 }}>{label}</div>
+        {decision === null && (
+          <span style={{ fontSize: 10, color: 'var(--color-amber)', marginRight: 4 }}>decide</span>
+        )}
         <button
           onClick={onAccept}
-          className="btn btn-ghost"
-          style={{ fontSize: 11, padding: '3px 10px', color: decision === 'accept' ? 'var(--color-brand-dark)' : 'var(--color-text-secondary)', borderColor: decision === 'accept' ? '#9FE1CB' : 'var(--color-border-strong)', background: decision === 'accept' ? 'var(--color-brand-light)' : 'transparent' }}
+          style={{
+            fontSize: 11, padding: '4px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+            border: '1px solid',
+            borderColor: decision === 'accept' ? 'var(--color-brand)' : 'var(--color-border-strong)',
+            background: decision === 'accept' ? 'var(--color-brand)' : 'transparent',
+            color: decision === 'accept' ? '#fff' : 'var(--color-text-secondary)',
+            fontWeight: decision === 'accept' ? 500 : 400,
+          }}
         >
-          Accept
+          {decision === 'accept' ? 'Accepted' : 'Accept'}
         </button>
         <button
           onClick={onReject}
-          className="btn btn-ghost"
-          style={{ fontSize: 11, padding: '3px 10px', color: decision === 'reject' ? 'var(--color-red)' : 'var(--color-text-secondary)', borderColor: decision === 'reject' ? '#F09595' : 'var(--color-border-strong)' }}
+          style={{
+            fontSize: 11, padding: '4px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+            border: '1px solid',
+            borderColor: decision === 'reject' ? 'var(--color-red)' : 'var(--color-border-strong)',
+            background: decision === 'reject' ? 'var(--color-red-light)' : 'transparent',
+            color: decision === 'reject' ? 'var(--color-red)' : 'var(--color-text-secondary)',
+            fontWeight: decision === 'reject' ? 500 : 400,
+          }}
         >
-          Reject
+          {decision === 'reject' ? 'Rejected' : 'Reject'}
         </button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>{reason}</div>
