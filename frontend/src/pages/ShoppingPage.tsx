@@ -18,6 +18,8 @@ export default function ShoppingPage() {
   const qc = useQueryClient()
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
   const [inStockModal, setInStockModal] = useState<ShoppingListItem | null>(null)
+  const [mergeSource, setMergeSource] = useState<ShoppingListItem | null>(null)
+  const [mergeTarget, setMergeTarget] = useState<ShoppingListItem | null>(null)
 
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: plansApi.list })
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null
@@ -65,6 +67,26 @@ export default function ShoppingPage() {
       qc.invalidateQueries({ queryKey: ['pantry'] })
     },
   })
+
+  const mergeItems = useMutation({
+    mutationFn: (body: { item_id_a: number; item_id_b: number; canonical_name: string; unit: string; permanent: boolean }) =>
+      shoppingApi.mergeItems(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shopping', activePlanId] })
+      setMergeSource(null)
+      setMergeTarget(null)
+    },
+  })
+
+  const handleMergeClick = (item: ShoppingListItem) => {
+    if (!mergeSource) {
+      setMergeSource(item)
+    } else if (mergeSource.id === item.id) {
+      setMergeSource(null) // cancel
+    } else {
+      setMergeTarget(item) // open confirm dialog
+    }
+  }
 
   // Split items into three buckets
   const allItems = shoppingList?.items ?? []
@@ -222,6 +244,8 @@ export default function ShoppingPage() {
                       items={items}
                       onCheck={id => checkItem.mutate(id)}
                       onMarkInStock={item => setInStockModal(item)}
+                      onMerge={handleMergeClick}
+                      mergeSourceId={mergeSource?.id ?? null}
                     />
                   )
                 })}
@@ -266,6 +290,23 @@ export default function ShoppingPage() {
               </div>
             )}
 
+            {/* Merge mode banner */}
+            {mergeSource && (
+              <div style={{
+                background: '#FAEEDA', border: '1px solid #FAC775',
+                borderRadius: 'var(--radius-md)', padding: '10px 14px',
+                fontSize: 12, color: '#854F0B', display: 'flex', alignItems: 'center', gap: 10
+              }}>
+                <span style={{ flex: 1 }}>
+                  Merging <strong>{mergeSource.ingredient.name}</strong> — tap another item to merge with it
+                </span>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }}
+                  onClick={() => setMergeSource(null)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+
             {toBuy.length === 0 && pantryConfirm.length === 0 && (
               <div className="empty-state">
                 <div className="empty-state-title">All done!</div>
@@ -275,6 +316,19 @@ export default function ShoppingPage() {
           </>
         )}
       </div>
+
+      {/* Merge confirm modal */}
+      {mergeSource && mergeTarget && (
+        <MergeModal
+          itemA={mergeSource}
+          itemB={mergeTarget}
+          onConfirm={(canonicalName, unit, permanent) =>
+            mergeItems.mutate({ item_id_a: mergeSource.id, item_id_b: mergeTarget.id, canonical_name: canonicalName, unit, permanent })
+          }
+          onClose={() => setMergeTarget(null)}
+          isPending={mergeItems.isPending}
+        />
+      )}
 
       {/* Mark in stock modal */}
       {inStockModal && (
@@ -289,12 +343,14 @@ export default function ShoppingPage() {
   )
 }
 
-function CategorySection({ label, color, items, onCheck, onMarkInStock }: {
+function CategorySection({ label, color, items, onCheck, onMarkInStock, onMerge, mergeSourceId }: {
   label: string
   color: string
   items: ShoppingListItem[]
   onCheck: (id: number) => void
   onMarkInStock: (item: ShoppingListItem) => void
+  onMerge: (item: ShoppingListItem) => void
+  mergeSourceId: number | null
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -317,7 +373,9 @@ function CategorySection({ label, color, items, onCheck, onMarkInStock }: {
         <div key={item.id} style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
           borderBottom: i < items.length - 1 ? '1px solid var(--color-border)' : 'none',
-          background: 'var(--color-surface)',
+          background: mergeSourceId === item.id ? '#FAEEDA' : mergeSourceId ? '#fdfcfb' : 'var(--color-surface)',
+          outline: mergeSourceId && mergeSourceId !== item.id ? '1px dashed #FAC775' : 'none',
+          outlineOffset: -1,
         }}>
           {/* Buy-list tick */}
           <div onClick={() => onCheck(item.id)} style={{
@@ -353,6 +411,21 @@ function CategorySection({ label, color, items, onCheck, onMarkInStock }: {
             style={{ fontSize: 11, padding: '3px 8px', color: 'var(--color-brand)', borderColor: '#9FE1CB', whiteSpace: 'nowrap' }}
           >
             I have this
+          </button>
+
+          {/* Merge button */}
+          <button
+            onClick={() => onMerge(item)}
+            className="btn btn-ghost"
+            style={{
+              fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap',
+              color: mergeSourceId === item.id ? '#854F0B' : 'var(--color-text-tertiary)',
+              borderColor: mergeSourceId === item.id ? '#FAC775' : 'transparent',
+              background: mergeSourceId === item.id ? '#FAEEDA' : 'transparent',
+            }}
+            title={mergeSourceId === item.id ? 'Cancel merge' : mergeSourceId ? 'Merge with selected' : 'Merge with another item'}
+          >
+            {mergeSourceId === item.id ? 'Merging...' : mergeSourceId ? 'Merge here' : 'Merge'}
           </button>
         </div>
       ))}
@@ -417,6 +490,101 @@ function InStockModal({ item, onConfirm, onClose, isPending }: {
             onClick={() => onConfirm(parseFloat(quantity), unit)}
           >
             {isPending ? 'Saving...' : 'Add to pantry'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MergeModal({ itemA, itemB, onConfirm, onClose, isPending }: {
+  itemA: ShoppingListItem
+  itemB: ShoppingListItem
+  onConfirm: (canonicalName: string, unit: string, permanent: boolean) => void
+  onClose: () => void
+  isPending: boolean
+}) {
+  const unitsMatch = itemA.unit === itemB.unit
+  const [canonicalName, setCanonicalName] = useState(itemA.ingredient.name)
+  const [unit, setUnit] = useState(itemA.unit)
+  const [permanent, setPermanent] = useState(false)
+
+  const combinedQty = unitsMatch
+    ? `${Math.round((itemA.quantity_to_buy + itemB.quantity_to_buy) * 100) / 100} ${unit}`
+    : 'units differ — set manually'
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)',
+        padding: 24, width: 400, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 16
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight: 500, fontSize: 15 }}>Merge ingredients</div>
+
+        {/* Items being merged */}
+        <div className="card" style={{ background: 'var(--color-surface-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+            <span style={{ color: 'var(--color-text-primary)' }}>{itemA.ingredient.name}</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>{itemA.quantity_to_buy} {itemA.unit}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'center' }}>+ merge with</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+            <span style={{ color: 'var(--color-text-primary)' }}>{itemB.ingredient.name}</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>{itemB.quantity_to_buy} {itemB.unit}</span>
+          </div>
+          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 500 }}>
+            <span>Combined</span>
+            <span style={{ color: 'var(--color-brand-dark)' }}>{combinedQty}</span>
+          </div>
+        </div>
+
+        {!unitsMatch && (
+          <div style={{ fontSize: 12, color: 'var(--color-amber)', background: 'var(--color-amber-light)', padding: '8px 12px', borderRadius: 'var(--radius-md)' }}>
+            These items have different units. Set the combined unit manually below.
+          </div>
+        )}
+
+        {/* Canonical name */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Combined ingredient name</label>
+          <input className="input" value={canonicalName} onChange={e => setCanonicalName(e.target.value)} />
+        </div>
+
+        {/* Unit — only editable if units differ */}
+        {!unitsMatch && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Unit</label>
+            <input className="input" value={unit} onChange={e => setUnit(e.target.value)} placeholder="e.g. g" />
+          </div>
+        )}
+
+        {/* Permanent toggle */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={permanent}
+            onChange={e => setPermanent(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: 'var(--color-brand)', cursor: 'pointer' }}
+          />
+          <div>
+            <div style={{ fontWeight: 500 }}>Save permanently</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+              Future imports will automatically merge these ingredients
+            </div>
+          </div>
+        </label>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn-primary"
+            disabled={!canonicalName || isPending}
+            onClick={() => onConfirm(canonicalName, unit, permanent)}
+          >
+            {isPending ? 'Merging...' : 'Merge'}
           </button>
         </div>
       </div>

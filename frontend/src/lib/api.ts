@@ -172,6 +172,8 @@ export const shoppingApi = {
     api.post<{ id: number; checked: boolean; from_pantry: boolean }>(
       `/shopping/items/${itemId}/mark-out-of-stock`
     ).then(r => r.data),
+  mergeItems: (body: { item_id_a: number; item_id_b: number; canonical_name: string; unit: string; permanent: boolean }) =>
+    api.post<ShoppingList>('/shopping/items/merge', body).then(r => r.data),
 }
 
 export const pantryApi = {

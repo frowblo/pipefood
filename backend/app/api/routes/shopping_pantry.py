@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models.models import ShoppingList, ShoppingListItem, Ingredient, PantryItem
+from app.models.models import ShoppingList, ShoppingListItem, Ingredient, PantryItem, IngredientAlias
 from app.schemas.schemas import ShoppingListOut, PantryItemCreate, PantryItemOut
 from app.services.shopping import generate_shopping_list
 
@@ -124,6 +124,87 @@ async def mark_out_of_stock(item_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"id": item_id, "checked": False, "from_pantry": False}
+
+
+class MergeItemsBody(BaseModel):
+    item_id_a: int
+    item_id_b: int
+    canonical_name: str
+    unit: str
+    permanent: bool = False
+
+
+@shopping_router.post("/items/merge", response_model=ShoppingListOut)
+async def merge_items(body: MergeItemsBody, db: AsyncSession = Depends(get_db)):
+    import math
+    item_a = await db.get(ShoppingListItem, body.item_id_a)
+    item_b = await db.get(ShoppingListItem, body.item_id_b)
+    if not item_a or not item_b:
+        raise HTTPException(404, "One or both items not found")
+    if item_a.list_id != item_b.list_id:
+        raise HTTPException(400, "Items must be on the same shopping list")
+
+    # Save original names before any changes
+    orig_name_a = item_a.ingredient.name
+    orig_name_b = item_b.ingredient.name
+
+    # Get or create canonical ingredient
+    result = await db.execute(
+        select(Ingredient).where(Ingredient.name == body.canonical_name.lower().strip())
+    )
+    canonical_ingredient = result.scalar_one_or_none()
+    if not canonical_ingredient:
+        canonical_ingredient = Ingredient(name=body.canonical_name.lower().strip())
+        db.add(canonical_ingredient)
+        await db.flush()
+
+    # Merge quantities
+    merged_needed = round(item_a.quantity_needed + item_b.quantity_needed, 2)
+    merged_to_buy = round(item_a.quantity_to_buy + item_b.quantity_to_buy, 2)
+    packs = None
+    leftover = 0.0
+    if canonical_ingredient.pack_size and canonical_ingredient.pack_size > 0:
+        packs = math.ceil(merged_needed / canonical_ingredient.pack_size)
+        merged_to_buy = round(packs * canonical_ingredient.pack_size, 2)
+        leftover = round(merged_to_buy - merged_needed, 2)
+
+    # Update item_a
+    item_a.ingredient_id = canonical_ingredient.id
+    item_a.quantity_needed = merged_needed
+    item_a.quantity_to_buy = merged_to_buy
+    item_a.unit = body.unit
+    item_a.packs_to_buy = packs
+    item_a.leftover_quantity = leftover
+    list_id = item_a.list_id
+
+    # Delete item_b
+    await db.delete(item_b)
+
+    # If permanent, save aliases for both source names
+    if body.permanent:
+        for orig_name in [orig_name_a, orig_name_b]:
+            if orig_name.lower() != body.canonical_name.lower():
+                existing = await db.execute(
+                    select(IngredientAlias).where(IngredientAlias.raw_name == orig_name.lower())
+                )
+                alias = existing.scalar_one_or_none()
+                if alias:
+                    alias.canonical_name = body.canonical_name
+                    alias.confirmed = True
+                else:
+                    db.add(IngredientAlias(
+                        raw_name=orig_name.lower(),
+                        canonical_name=body.canonical_name,
+                        confirmed=True,
+                    ))
+
+    await db.commit()
+    result = await db.execute(
+        select(ShoppingList)
+        .options(selectinload(ShoppingList.items).selectinload(ShoppingListItem.ingredient))
+        .where(ShoppingList.id == list_id)
+    )
+    return result.scalar_one()
 
 
 # --- Pantry router ---
