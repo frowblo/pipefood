@@ -33,6 +33,7 @@ class RecipeIngredientIn(BaseModel):
     notes: Optional[str] = None
 
     group: Optional[str] = None
+    category: Optional[str] = None  # passed through to Ingredient on save
 
     model_config = {"populate_by_name": True}
 

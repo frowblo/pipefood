@@ -137,8 +137,21 @@ class MergeItemsBody(BaseModel):
 @shopping_router.post("/items/merge", response_model=ShoppingListOut)
 async def merge_items(body: MergeItemsBody, db: AsyncSession = Depends(get_db)):
     import math
-    item_a = await db.get(ShoppingListItem, body.item_id_a)
-    item_b = await db.get(ShoppingListItem, body.item_id_b)
+
+    # Load both items with ingredients eagerly to avoid MissingGreenlet
+    result_a = await db.execute(
+        select(ShoppingListItem)
+        .options(selectinload(ShoppingListItem.ingredient))
+        .where(ShoppingListItem.id == body.item_id_a)
+    )
+    result_b = await db.execute(
+        select(ShoppingListItem)
+        .options(selectinload(ShoppingListItem.ingredient))
+        .where(ShoppingListItem.id == body.item_id_b)
+    )
+    item_a = result_a.scalar_one_or_none()
+    item_b = result_b.scalar_one_or_none()
+
     if not item_a or not item_b:
         raise HTTPException(404, "One or both items not found")
     if item_a.list_id != item_b.list_id:

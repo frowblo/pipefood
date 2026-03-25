@@ -109,6 +109,20 @@ NUTRITION (per serving):
 - Round calories to nearest integer, protein and fibre to 1 decimal place
 - If nutritional info is not present on the page, omit all three keys entirely
 
+INGREDIENT CATEGORY:
+- Every ingredient must have a "category" field chosen from this exact list:
+  produce, meat, seafood, dairy, dry_goods, condiments, frozen, bakery, other
+- Guidelines:
+  produce: fresh fruit, vegetables, herbs, mushrooms, garlic, ginger, onion
+  meat: beef, chicken, pork, lamb, duck, bacon, salami, any land animal
+  seafood: fish, prawns, squid, crab, mussels, any seafood
+  dairy: milk, cream, butter, cheese, yoghurt, eggs, sour cream
+  dry_goods: flour, sugar, rice, pasta, noodles, bread, oats, lentils, beans, canned goods, coconut milk (tinned), stock powder
+  condiments: sauces, oils, vinegars, soy sauce, fish sauce, miso, sesame oil, honey, mustard, ketchup, spices, salt, pepper
+  frozen: anything bought frozen
+  bakery: bread, tortillas, wraps, pastry, pizza bases
+  other: anything that genuinely doesn't fit above
+
 GENERAL:
 - quantity must always be a number
 - notes: brief prep details only (e.g. "finely chopped") — omit if not useful

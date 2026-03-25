@@ -20,15 +20,29 @@ router = APIRouter(prefix="/recipes", tags=["recipes"])
 RECIPE_LOAD = selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ingredient)
 
 
-async def get_or_create_ingredient(name: str, db: AsyncSession) -> Ingredient:
+async def get_or_create_ingredient(name: str, db: AsyncSession, category: str | None = None) -> Ingredient:
     result = await db.execute(
         select(Ingredient).where(Ingredient.name == name.lower().strip())
     )
     ingredient = result.scalar_one_or_none()
     if not ingredient:
-        ingredient = Ingredient(name=name.lower().strip())
+        from app.models.models import IngredientCategory
+        cat = IngredientCategory.other
+        if category:
+            try:
+                cat = IngredientCategory(category)
+            except ValueError:
+                pass
+        ingredient = Ingredient(name=name.lower().strip(), category=cat)
         db.add(ingredient)
         await db.flush()
+    elif category and ingredient.category == IngredientCategory.other:
+        # Update category if previously uncategorised
+        from app.models.models import IngredientCategory
+        try:
+            ingredient.category = IngredientCategory(category)
+        except ValueError:
+            pass
     return ingredient
 
 
@@ -69,7 +83,7 @@ async def create_recipe(body: RecipeCreate, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     for ri_in in body.ingredients:
-        ingredient = await get_or_create_ingredient(ri_in.ingredient_name, db)
+        ingredient = await get_or_create_ingredient(ri_in.ingredient_name, db, ri_in.category)
         ri = RecipeIngredient(
             recipe_id=recipe.id,
             ingredient_id=ingredient.id,
@@ -295,7 +309,7 @@ async def import_confirm(body: ConfirmImportRequest, db: AsyncSession = Depends(
     await db.flush()
 
     for ri_in in recipe_data.ingredients:
-        ingredient = await get_or_create_ingredient(ri_in.ingredient_name, db)
+        ingredient = await get_or_create_ingredient(ri_in.ingredient_name, db, ri_in.category)
         ri = RecipeIngredient(
             recipe_id=recipe.id,
             ingredient_id=ingredient.id,
@@ -311,3 +325,71 @@ async def import_confirm(body: ConfirmImportRequest, db: AsyncSession = Depends(
         select(Recipe).options(RECIPE_LOAD).where(Recipe.id == recipe.id)
     )
     return result.scalar_one()
+
+
+@router.post("/ingredients/recategorise", response_model=dict)
+async def recategorise_ingredients(db: AsyncSession = Depends(get_db)):
+    """
+    One-off endpoint: ask Claude to assign categories to all uncategorised ingredients.
+    Call this once after deploying the category fix to update existing data.
+    """
+    from sqlalchemy import update
+    from app.models.models import IngredientCategory
+    import anthropic as _anthropic
+    import json as _json
+    from app.core.config import settings
+
+    # Fetch all ingredients currently set to 'other'
+    result = await db.execute(
+        select(Ingredient).where(Ingredient.category == IngredientCategory.other)
+    )
+    uncategorised = result.scalars().all()
+    if not uncategorised:
+        return {"updated": 0, "message": "All ingredients already categorised"}
+
+    names = [i.name for i in uncategorised]
+
+    prompt = """Given this list of ingredient names, return ONLY valid JSON mapping each name to its
+supermarket category. Use exactly these categories:
+produce, meat, seafood, dairy, dry_goods, condiments, frozen, bakery, other
+
+Guidelines:
+produce: fresh fruit, vegetables, herbs, mushrooms, garlic, ginger, onion
+meat: beef, chicken, pork, lamb, duck, bacon, any land animal meat
+seafood: fish, prawns, squid, crab, mussels, any seafood
+dairy: milk, cream, butter, cheese, yoghurt, eggs, sour cream
+dry_goods: flour, sugar, rice, pasta, noodles, bread, oats, lentils, beans, canned goods, coconut milk (tinned), stock
+condiments: sauces, oils, vinegars, soy sauce, fish sauce, sesame oil, honey, mustard, spices, salt, pepper
+frozen: anything typically bought frozen
+bakery: bread, tortillas, wraps, pastry, pizza bases
+other: only if genuinely none of the above fit
+
+Return format (no preamble, no fences):
+{"ingredient name": "category", ...}
+
+Ingredients:
+""" + "\n".join(f"- {n}" for n in names)
+
+    client = _anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    message = await client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+    mapping: dict = _json.loads(raw)
+
+    updated = 0
+    for ingredient in uncategorised:
+        cat_str = mapping.get(ingredient.name)
+        if cat_str:
+            try:
+                ingredient.category = IngredientCategory(cat_str)
+                updated += 1
+            except ValueError:
+                pass
+
+    await db.commit()
+    return {"updated": updated, "total": len(uncategorised)}
