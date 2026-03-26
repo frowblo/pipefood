@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import WoolworthsPanel from './WoolworthsPanel'
+import { api } from '../lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { plansApi, shoppingApi, pantryApi, ShoppingListItem } from '../lib/api'
 
@@ -24,6 +26,10 @@ export default function ShoppingPage() {
   const [showWoolworths, setShowWoolworths] = useState(false)
 
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: plansApi.list })
+  const { data: woolworthsStatus } = useQuery({
+    queryKey: ['woolworths-status'],
+    queryFn: () => api.get<{ linked: boolean }>('/woolworths/status').then(r => r.data),
+  })
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null
 
   const { data: shoppingList, isLoading } = useQuery({
@@ -126,19 +132,30 @@ export default function ShoppingPage() {
           </button>
           {shoppingList && toBuy.length > 0 && (
             <button
-              onClick={() => setShowWoolworths(true)}
+              onClick={() => woolworthsStatus?.linked
+                ? setShowWoolworths(true)
+                : window.location.href = '/settings'
+              }
+              title={woolworthsStatus?.linked ? 'Match to Woolworths' : 'Link your Woolworths account in Settings'}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '7px 14px', borderRadius: 'var(--radius-md)',
-                background: '#007837', color: '#fff', border: 'none',
+                background: woolworthsStatus?.linked ? '#007837' : 'var(--color-surface-subtle)',
+                color: woolworthsStatus?.linked ? '#fff' : 'var(--color-text-secondary)',
+                border: woolworthsStatus?.linked ? 'none' : '1px solid var(--color-border-strong)',
                 fontSize: 13, fontWeight: 500, cursor: 'pointer',
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="white" strokeWidth="2"/>
-                <path d="M3 6h18M16 10a4 4 0 01-8 0" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"
+                  stroke={woolworthsStatus?.linked ? 'white' : 'currentColor'} strokeWidth="2"/>
+                <path d="M3 6h18M16 10a4 4 0 01-8 0"
+                  stroke={woolworthsStatus?.linked ? 'white' : 'currentColor'} strokeWidth="2" strokeLinecap="round"/>
               </svg>
               Woolworths
+              {!woolworthsStatus?.linked && (
+                <span style={{ fontSize: 10, opacity: 0.7 }}>· not linked</span>
+              )}
             </button>
           )}
         </div>

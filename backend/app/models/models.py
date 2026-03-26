@@ -220,3 +220,13 @@ class IngredientStoreMapping(Base):
     last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     ingredient: Mapped["Ingredient"] = relationship()
+
+
+class WoolworthsToken(Base):
+    """Stores the Woolworths session cookie string captured via bookmarklet."""
+    __tablename__ = "woolworths_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cookie_string: Mapped[str] = mapped_column(Text)
+    auth_token: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    linked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

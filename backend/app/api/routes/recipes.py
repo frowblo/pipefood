@@ -21,12 +21,12 @@ RECIPE_LOAD = selectinload(Recipe.ingredients).selectinload(RecipeIngredient.ing
 
 
 async def get_or_create_ingredient(name: str, db: AsyncSession, category: str | None = None) -> Ingredient:
+    from app.models.models import IngredientCategory
     result = await db.execute(
         select(Ingredient).where(Ingredient.name == name.lower().strip())
     )
     ingredient = result.scalar_one_or_none()
     if not ingredient:
-        from app.models.models import IngredientCategory
         cat = IngredientCategory.other
         if category:
             try:
@@ -37,8 +37,6 @@ async def get_or_create_ingredient(name: str, db: AsyncSession, category: str | 
         db.add(ingredient)
         await db.flush()
     elif category and ingredient.category == IngredientCategory.other:
-        # Update category if previously uncategorised
-        from app.models.models import IngredientCategory
         try:
             ingredient.category = IngredientCategory(category)
         except ValueError:

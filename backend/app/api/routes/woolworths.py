@@ -230,3 +230,81 @@ async def get_cart_items(list_id: int, db: AsyncSession = Depends(get_db)):
         ))
 
     return cart_items
+
+
+# ---------------------------------------------------------------------------
+# Account linking — receive token from bookmarklet
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel as _BaseModel
+
+class LinkTokenBody(_BaseModel):
+    cookies: str  # raw document.cookie string from woolworths.com.au
+
+
+class LinkStatus(_BaseModel):
+    linked: bool
+    expires: str | None = None
+
+
+# Store token in a simple DB table — reuse IngredientStoreMapping table's pattern
+# but use a dedicated settings approach via a simple key-value in DB
+
+@router.post("/link", status_code=200)
+async def link_account(body: LinkTokenBody, db: AsyncSession = Depends(get_db)):
+    """
+    Receive cookies from the bookmarklet running on woolworths.com.au.
+    Extract the auth token and store it for use in product searches.
+    """
+    import re
+    from app.models.models import WoolworthsToken
+
+    # Extract the most useful auth cookie — try several known names
+    token = None
+    expiry = None
+    for cookie_name in ["wow-auth-token", "WOWToken", "login-token", "auth-token"]:
+        match = re.search(
+            rf'(?:^|;\s*){re.escape(cookie_name)}=([^;]+)', body.cookies
+        )
+        if match:
+            token = match.group(1)
+            break
+
+    # Store the full cookie string regardless — we'll send it all
+    result = await db.execute(select(WoolworthsToken))
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.cookie_string = body.cookies
+        existing.auth_token = token
+        existing.linked_at = __import__('datetime').datetime.utcnow()
+    else:
+        from app.models.models import WoolworthsToken as WT
+        db.add(WT(
+            cookie_string=body.cookies,
+            auth_token=token,
+        ))
+    await db.commit()
+    return {"linked": True, "message": "Woolworths account linked successfully"}
+
+
+@router.get("/status", response_model=LinkStatus)
+async def link_status(db: AsyncSession = Depends(get_db)):
+    """Check if a Woolworths account is currently linked."""
+    from app.models.models import WoolworthsToken
+    result = await db.execute(select(WoolworthsToken))
+    token = result.scalar_one_or_none()
+    if not token:
+        return LinkStatus(linked=False)
+    linked_at = token.linked_at.strftime("%d %b %Y") if token.linked_at else None
+    return LinkStatus(linked=True, expires=linked_at)
+
+
+@router.delete("/link", status_code=204)
+async def unlink_account(db: AsyncSession = Depends(get_db)):
+    """Remove the stored Woolworths token."""
+    from app.models.models import WoolworthsToken
+    result = await db.execute(select(WoolworthsToken))
+    token = result.scalar_one_or_none()
+    if token:
+        await db.delete(token)
+        await db.commit()

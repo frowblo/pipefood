@@ -94,10 +94,25 @@ def _calculate_packs(
     return 1
 
 
+async def get_stored_cookies() -> str | None:
+    """Retrieve stored Woolworths cookies from the database."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.models.models import WoolworthsToken
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(WoolworthsToken))
+            token = result.scalar_one_or_none()
+            return token.cookie_string if token else None
+    except Exception:
+        return None
+
+
 async def search_products(query: str, page_size: int = 5) -> list[dict]:
     """
     Search Woolworths for products matching a query.
     Returns a list of product dicts with stockcode, name, price, pack size etc.
+    Requires stored session cookies from the bookmarklet link flow.
     """
     params = {
         "searchTerm": query,
@@ -108,8 +123,20 @@ async def search_products(query: str, page_size: int = 5) -> list[dict]:
         "filters": "[]",
     }
 
+    # Get stored cookies
+    cookie_string = await get_stored_cookies()
+    if not cookie_string:
+        raise ValueError("Woolworths account not linked. Please link your account in Settings.")
+
+    headers = {
+        **HEADERS,
+        "Cookie": cookie_string,
+    }
+
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(SEARCH_URL, params=params, headers=HEADERS)
+        resp = await client.get(SEARCH_URL, params=params, headers=headers)
+        if resp.status_code == 401 or resp.status_code == 403:
+            raise ValueError("Woolworths session expired. Please re-link your account in Settings.")
         resp.raise_for_status()
         data = resp.json()
 

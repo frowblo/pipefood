@@ -7,6 +7,7 @@ import PlannerPage from './pages/PlannerPage'
 import RecipesPage from './pages/RecipesPage'
 import ShoppingPage from './pages/ShoppingPage'
 import PantryPage from './pages/PantryPage'
+import SettingsPage from './pages/SettingsPage'
 import ThisWeekPage from './pages/ThisWeekPage'
 import './index.css'
 
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="this-week" element={<ThisWeekPage />} />
             <Route path="shopping" element={<ShoppingPage />} />
             <Route path="pantry" element={<PantryPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

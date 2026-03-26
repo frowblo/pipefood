@@ -49,7 +49,7 @@ export default function WoolworthsPanel({ shoppingList, onClose }: Props) {
 
   // Step 2: save confirmed mappings
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (): Promise<any> => {
       if (!matchResult) return Promise.resolve()
       const mappings = matchResult.matches
         .filter(m => decisions[m.shopping_list_item_id] != null)
