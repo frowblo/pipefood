@@ -61,8 +61,12 @@ async def match_list(list_id: int, db: AsyncSession = Depends(get_db)):
 
     async def search_item(item: ShoppingListItem) -> tuple[int, list[dict]]:
         try:
-            results = await search_products(item.ingredient.name, page_size=5)
-            return item.id, results
+            from app.services.woolworths import _clean_search_query, _score_result
+            clean_query = _clean_search_query(item.ingredient.name)
+            results = await search_products(clean_query, page_size=8)
+            # Re-rank by relevance
+            scored = sorted(results, key=lambda p: _score_result(p, clean_query), reverse=True)
+            return item.id, scored
         except Exception:
             return item.id, []
 

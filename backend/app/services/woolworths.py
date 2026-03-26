@@ -135,14 +135,21 @@ async def search_products(query: str, page_size: int = 5) -> list[dict]:
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(SEARCH_URL, params=params, headers=headers)
+        import logging
+        logging.warning(f"[WOOLWORTHS] Search '{query}' status={resp.status_code}")
+        logging.warning(f"[WOOLWORTHS] Response (first 500): {resp.text[:500]}")
         if resp.status_code == 401 or resp.status_code == 403:
             raise ValueError("Woolworths session expired. Please re-link your account in Settings.")
         resp.raise_for_status()
         data = resp.json()
+        logging.warning(f"[WOOLWORTHS] Bundles count: {len(data.get('Bundles', []))}, Products count: {len(data.get('Products', []))}")
 
     products = []
-    bundles = data.get("Bundles", []) or []
-    for bundle in bundles:
+    # Authenticated sessions return {"Products":[{"Products":[...]}]}
+    # Unauthenticated returns {"Bundles":[{"Products":[...]}]}
+    # Handle both
+    containers = data.get("Bundles") or data.get("Products") or []
+    for bundle in containers:
         for product in bundle.get("Products", []):
             stockcode = str(product.get("Stockcode", ""))
             name = product.get("Name", "")
@@ -159,6 +166,12 @@ async def search_products(query: str, page_size: int = 5) -> list[dict]:
                 pack_size_g, pack_size_ml = _parse_pack_size(str(pack_desc))
                 pack_desc_str = str(pack_desc)
 
+            # Avoid "Woolworths Woolworths X" — name often already includes brand
+            if brand and not name.lower().startswith(brand.lower()):
+                display_name = f"{brand} {name}".strip()
+            else:
+                display_name = name
+
             products.append({
                 "stockcode": stockcode,
                 "name": name,
@@ -167,13 +180,72 @@ async def search_products(query: str, page_size: int = 5) -> list[dict]:
                 "pack_description": pack_desc_str,
                 "pack_size_g": pack_size_g,
                 "pack_size_ml": pack_size_ml,
-                "display_name": f"{brand} {name}".strip() if brand else name,
+                "display_name": display_name,
             })
 
     return products
 
 
+# Keywords that suggest a non-food product result
+NON_FOOD_KEYWORDS = [
+    "juicer", "squeezer", "press", "machine", "tool", "gadget", "peeler",
+    "grater", "slicer", "chopper", "board", "knife", "bowl", "pan", "pot",
+    "container", "storage", "bag", "wrap", "spray", "cleaner", "wipe",
+]
+
+
+def _clean_search_query(ingredient_name: str) -> str:
+    """Strip parenthetical notes and extra words that confuse product search."""
+    import re
+    # Remove anything in parentheses: "lime (whole fruit for juice)" -> "lime"
+    clean = re.sub(r'\s*\([^)]*\)', '', ingredient_name).strip()
+    # Remove common prep notes after comma: "chicken thigh, boneless" -> "chicken thigh"
+    clean = clean.split(',')[0].strip()
+    return clean
+
+
+def _score_result(product: dict, query: str) -> int:
+    """
+    Score a product result for relevance to the query.
+    Higher is better. Used to re-rank results.
+    """
+    score = 0
+    name_lower = product["name"].lower()
+    query_lower = query.lower()
+
+    # Strong signal: product name contains the query term
+    if query_lower in name_lower:
+        score += 10
+    # Partial match: each query word appears in name
+    for word in query_lower.split():
+        if len(word) > 2 and word in name_lower:
+            score += 3
+
+    # Penalise non-food keywords
+    for kw in NON_FOOD_KEYWORDS:
+        if kw in name_lower:
+            score -= 20
+
+    # Prefer results that have a pack size (actual food products)
+    if product.get("pack_size_g") or product.get("pack_size_ml"):
+        score += 2
+
+    # Prefer results with a price
+    if product.get("price"):
+        score += 1
+
+    return score
+
+
 async def find_best_match(ingredient_name: str) -> Optional[dict]:
     """Search for an ingredient and return the single best match."""
-    results = await search_products(ingredient_name, page_size=5)
-    return results[0] if results else None
+    clean_query = _clean_search_query(ingredient_name)
+    results = await search_products(clean_query, page_size=8)
+    if not results:
+        return None
+    # Re-rank by relevance score
+    scored = sorted(results, key=lambda p: _score_result(p, clean_query), reverse=True)
+    # Return None if best result has a very negative score (clearly wrong)
+    if _score_result(scored[0], clean_query) < -5:
+        return None
+    return scored[0]

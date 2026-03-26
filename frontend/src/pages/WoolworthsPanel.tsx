@@ -17,6 +17,11 @@ interface Props {
   onClose: () => void
 }
 
+// Strip parenthetical notes for display in search field
+function _cleanName(name: string): string {
+  return name.replace(/\s*\([^)]*\)/g, '').split(',')[0].trim()
+}
+
 export default function WoolworthsPanel({ shoppingList, onClose }: Props) {
   const [phase, setPhase] = useState<'matching' | 'review' | 'ready'>('matching')
   const [matchResult, setMatchResult] = useState<ListMatchResult | null>(null)
@@ -342,42 +347,42 @@ addToCart();
 
                     {/* Matched product */}
                     {decision && !isSearching && (
-                      <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>
-                            {decision.product.display_name}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
-                            {decision.product.pack_description}
-                            {decision.product.price && ` · $${decision.product.price.toFixed(2)}`}
-                          </div>
+                      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
+                          {decision.product.display_name}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button style={{
-                            border: '1px solid var(--color-border-strong)', background: 'none',
-                            borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 12,
-                          }} onClick={() => {
-                            const newPacks = Math.max(1, decision.packs - 1)
-                            setDecisions(d => ({ ...d, [match.shopping_list_item_id]: { ...decision, packs: newPacks } }))
-                          }}>−</button>
-                          <span style={{ fontSize: 13, minWidth: 30, textAlign: 'center' }}>
-                            ×{decision.packs}
-                          </span>
-                          <button style={{
-                            border: '1px solid var(--color-border-strong)', background: 'none',
-                            borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 12,
-                          }} onClick={() => {
-                            setDecisions(d => ({ ...d, [match.shopping_list_item_id]: { ...decision, packs: decision.packs + 1 } }))
-                          }}>+</button>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                          {decision.product.pack_description}
+                          {decision.product.price && ` · $${decision.product.price.toFixed(2)}`}
                         </div>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }}
-                          onClick={() => { setSearchingFor(match.shopping_list_item_id); setSearchQuery(match.ingredient_name) }}>
-                          Change
-                        </button>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--color-text-tertiary)' }}
-                          onClick={() => setDecisions(d => ({ ...d, [match.shopping_list_item_id]: null }))}>
-                          Skip
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button style={{
+                              border: '1px solid var(--color-border-strong)', background: 'none',
+                              borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 13,
+                            }} onClick={() => {
+                              const newPacks = Math.max(1, decision.packs - 1)
+                              setDecisions(d => ({ ...d, [match.shopping_list_item_id]: { ...decision, packs: newPacks } }))
+                            }}>−</button>
+                            <span style={{ fontSize: 13, minWidth: 36, textAlign: 'center', fontWeight: 500 }}>
+                              ×{decision.packs}
+                            </span>
+                            <button style={{
+                              border: '1px solid var(--color-border-strong)', background: 'none',
+                              borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 13,
+                            }} onClick={() => {
+                              setDecisions(d => ({ ...d, [match.shopping_list_item_id]: { ...decision, packs: decision.packs + 1 } }))
+                            }}>+</button>
+                          </div>
+                          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '3px 10px' }}
+                            onClick={() => { setSearchingFor(match.shopping_list_item_id); setSearchQuery(_cleanName(match.ingredient_name)) }}>
+                            Change
+                          </button>
+                          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '3px 10px', color: 'var(--color-text-tertiary)' }}
+                            onClick={() => setDecisions(d => ({ ...d, [match.shopping_list_item_id]: null }))}>
+                            Skip
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -386,7 +391,7 @@ addToCart();
                       <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ flex: 1, fontSize: 12, color: 'var(--color-text-tertiary)' }}>No match found</span>
                         <button className="btn btn-ghost" style={{ fontSize: 11 }}
-                          onClick={() => { setSearchingFor(match.shopping_list_item_id); setSearchQuery(match.ingredient_name) }}>
+                          onClick={() => { setSearchingFor(match.shopping_list_item_id); setSearchQuery(_cleanName(match.ingredient_name)) }}>
                           Search manually
                         </button>
                       </div>

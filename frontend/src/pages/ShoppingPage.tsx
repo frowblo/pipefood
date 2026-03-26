@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import WoolworthsPanel from './WoolworthsPanel'
-import { api } from '../lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { plansApi, shoppingApi, pantryApi, ShoppingListItem } from '../lib/api'
+import WoolworthsPanel from './WoolworthsPanel'
+import { api, plansApi, shoppingApi, pantryApi, ShoppingListItem } from '../lib/api'
 
 const CATEGORY_ORDER = ['meat', 'seafood', 'produce', 'dairy', 'dry_goods', 'condiments', 'frozen', 'bakery', 'other']
 const CATEGORY_LABELS: Record<string, string> = {
