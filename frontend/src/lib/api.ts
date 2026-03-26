@@ -181,3 +181,50 @@ export const pantryApi = {
   upsert: (data: object) => api.put<PantryItem>('/pantry', data).then(r => r.data),
   delete: (id: number) => api.delete(`/pantry/${id}`),
 }
+
+// --- Woolworths ---
+
+export interface WoolworthsProduct {
+  stockcode: string
+  name: string
+  brand?: string
+  price?: number
+  pack_description?: string
+  pack_size_g?: number
+  pack_size_ml?: number
+  display_name: string
+}
+
+export interface ShoppingItemMatch {
+  shopping_list_item_id: number
+  ingredient_name: string
+  quantity_to_buy: number
+  unit: string
+  best_match?: WoolworthsProduct
+  alternatives: WoolworthsProduct[]
+  packs_to_buy: number
+  confirmed: boolean
+  existing_mapping: boolean
+}
+
+export interface ListMatchResult {
+  list_id: number
+  matches: ShoppingItemMatch[]
+}
+
+export interface CartItem {
+  stockcode: string
+  quantity: number
+  product_name: string
+}
+
+export const woolworthsApi = {
+  matchList: (listId: number) =>
+    api.get<ListMatchResult>(`/woolworths/match/${listId}`).then(r => r.data),
+  saveMappings: (mappings: object[]) =>
+    api.post('/woolworths/mappings', mappings),
+  search: (q: string) =>
+    api.get<WoolworthsProduct[]>('/woolworths/search', { params: { q } }).then(r => r.data),
+  getCartItems: (listId: number) =>
+    api.get<CartItem[]>(`/woolworths/cart/${listId}`).then(r => r.data),
+}

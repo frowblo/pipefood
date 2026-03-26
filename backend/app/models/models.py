@@ -197,3 +197,26 @@ class IngredientConsolidation(Base):
     consolidated_name: Mapped[str] = mapped_column(String(200))
     confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class IngredientStoreMapping(Base):
+    """
+    Maps a canonical ingredient to a specific product in a supermarket.
+    Confirmed mappings are reused automatically on future lists.
+    """
+    __tablename__ = "ingredient_store_mappings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ingredient_id: Mapped[int] = mapped_column(ForeignKey("ingredients.id"), index=True)
+    store: Mapped[str] = mapped_column(String(50), default="woolworths")  # woolworths | coles
+    stockcode: Mapped[str] = mapped_column(String(50))
+    product_name: Mapped[str] = mapped_column(String(300))
+    product_brand: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    pack_size_description: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g. "1kg", "400ml"
+    pack_size_g: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pack_size_ml: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price_aud: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    ingredient: Mapped["Ingredient"] = relationship()

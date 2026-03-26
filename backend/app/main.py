@@ -5,6 +5,7 @@ from app.db.session import engine, Base
 from app.api.routes.recipes import router as recipes_router
 from app.api.routes.plans import router as plans_router
 from app.api.routes.shopping_pantry import shopping_router, pantry_router
+from app.api.routes.woolworths import router as woolworths_router
 
 # redirect_slashes=True (default) — lets /api/recipes redirect to /api/recipes/
 # which is correct behaviour; the 404 was caused by disabling this
@@ -35,3 +36,4 @@ app.include_router(recipes_router, prefix="/api")
 app.include_router(plans_router, prefix="/api")
 app.include_router(shopping_router, prefix="/api")
 app.include_router(pantry_router, prefix="/api")
+app.include_router(woolworths_router, prefix="/api")

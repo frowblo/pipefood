@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import WoolworthsPanel from './WoolworthsPanel'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { plansApi, shoppingApi, pantryApi, ShoppingListItem } from '../lib/api'
 
@@ -20,6 +21,7 @@ export default function ShoppingPage() {
   const [inStockModal, setInStockModal] = useState<ShoppingListItem | null>(null)
   const [mergeSource, setMergeSource] = useState<ShoppingListItem | null>(null)
   const [mergeTarget, setMergeTarget] = useState<ShoppingListItem | null>(null)
+  const [showWoolworths, setShowWoolworths] = useState(false)
 
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: plansApi.list })
   const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null
@@ -122,6 +124,23 @@ export default function ShoppingPage() {
             disabled={!activePlanId || generate.isPending}>
             {generate.isPending ? 'Generating...' : shoppingList ? 'Regenerate' : 'Generate list'}
           </button>
+          {shoppingList && toBuy.length > 0 && (
+            <button
+              onClick={() => setShowWoolworths(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', borderRadius: 'var(--radius-md)',
+                background: '#007837', color: '#fff', border: 'none',
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="white" strokeWidth="2"/>
+                <path d="M3 6h18M16 10a4 4 0 01-8 0" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              Woolworths
+            </button>
+          )}
         </div>
       </div>
 
@@ -339,6 +358,12 @@ export default function ShoppingPage() {
           isPending={markInStock.isPending}
         />
       )}
+    {showWoolworths && shoppingList && (
+      <WoolworthsPanel
+        shoppingList={shoppingList}
+        onClose={() => setShowWoolworths(false)}
+      />
+    )}
     </div>
   )
 }

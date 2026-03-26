@@ -194,3 +194,51 @@ class ConfirmImportRequest(BaseModel):
     parsed: dict
     alias_decisions: list[AliasDecision] = []
     consolidation_decisions: list[ConsolidationDecision] = []
+
+
+# --- Woolworths matching ---
+
+class WoolworthsProduct(BaseModel):
+    stockcode: str
+    name: str
+    brand: Optional[str] = None
+    price: Optional[float] = None
+    pack_description: Optional[str] = None
+    pack_size_g: Optional[float] = None
+    pack_size_ml: Optional[float] = None
+    display_name: str
+
+
+class ShoppingItemMatch(BaseModel):
+    shopping_list_item_id: int
+    ingredient_name: str
+    quantity_to_buy: float
+    unit: str
+    best_match: Optional[WoolworthsProduct] = None
+    alternatives: list[WoolworthsProduct] = []
+    packs_to_buy: int = 1
+    confirmed: bool = False
+    existing_mapping: bool = False  # True if loaded from saved mapping
+
+
+class ListMatchResult(BaseModel):
+    list_id: int
+    matches: list[ShoppingItemMatch]
+
+
+class ConfirmMappingRequest(BaseModel):
+    ingredient_id: int
+    stockcode: str
+    product_name: str
+    product_brand: Optional[str] = None
+    pack_description: Optional[str] = None
+    pack_size_g: Optional[float] = None
+    pack_size_ml: Optional[float] = None
+    price_aud: Optional[float] = None
+    packs_to_buy: int
+
+
+class CartItem(BaseModel):
+    stockcode: str
+    quantity: int
+    product_name: str
